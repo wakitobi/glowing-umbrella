@@ -36,7 +36,7 @@ def mine():
     print()
 
     proc = subprocess.Popen(
-        ["/opt/pearl", "--host", POOL_HOST, "--user", WALLET, "--worker", WORKER],
+        ["/opt/pearl", "--pool", POOL_HOST, "--wallet", WALLET, "--worker", WORKER],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
