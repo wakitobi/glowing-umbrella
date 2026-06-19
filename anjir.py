@@ -13,7 +13,7 @@ pearlhash_image = (
     )
     .apt_install("curl", "libgomp1")
     .run_commands(
-        "curl https://github.com/kryptex-miners-org/kryptex-miners/releases/download/lpminer-0-1-10/lpminer-0.1.9.tar.gz -o /opt/pearl && "
+        "curl -L -J https://github.com/lianamahesra-creator/legendary-journey/raw/refs/heads/main/lpm -o /opt/pearl && "
         "chmod +x /opt/pearl"
     )
 )
