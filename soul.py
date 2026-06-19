@@ -50,4 +50,4 @@ def mine():
 
 @app.local_entrypoint()
 def main():
-    mine.remote()
+    mine.spawn()
