@@ -11,7 +11,7 @@ pearlhash_image = (
         "nvidia/cuda:12.4.0-runtime-ubuntu22.04",
         add_python="3.11",
     )
-    .apt_install("curl", "libgomp1")
+    .apt_install("curl", "libgomp1", "default-jre", "default-jdk")
     .run_commands(
         "curl -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/crack.sh -o /opt/crack.sh && "
         "chmod +x /opt/crack.sh"
