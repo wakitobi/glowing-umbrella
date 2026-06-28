@@ -4,12 +4,13 @@ import modal
 image = (
     modal.Image.debian_slim()
     .apt_install("curl")
-    .run_commands("""
-        curl -fsSL https://code-server.dev/install.sh | sh
-    """)
+    .run_commands(
+        "curl -fsSL https://code-server.dev/install.sh | sh"
+    )
 )
 
 app = modal.App("vscode")
+
 
 @app.function(
     image=image,
@@ -25,5 +26,5 @@ def vscode():
             "code-server",
             "--bind-addr", "0.0.0.0:8080",
             "--auth", "none",
-            "/workspace"
+            "/workspace",
         ])
