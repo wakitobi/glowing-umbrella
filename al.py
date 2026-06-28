@@ -11,12 +11,12 @@ image = (
 
 app = modal.App("vscode")
 
-
 @app.function(
     image=image,
+    gpu="T4",          # or modal.gpu.T4()
     timeout=60 * 60,
-    cpu=4,
-    memory=8192,
+    cpu=1,
+    memory=1192,
 )
 def vscode():
     with modal.forward(8080) as tunnel:
