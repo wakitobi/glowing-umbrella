@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ACCOUNT_ID="c5940c02e3dafe0fd1cd850d89202dfc"
-API_TOKEN="YOUR_API_TOKEN"
+API_TOKEN="cfut_9nfwH1Hxu6yn3nwI6zk5ILfWuOELGi9CFUYzwqNa8b740353"
 
 MODEL="@cf/meta/llama-3.1-8b-instruct-fast"
 
