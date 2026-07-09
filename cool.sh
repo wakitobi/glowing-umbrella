@@ -38,9 +38,4 @@ screen -dmS play ./"$BOS_FILE" \
     -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.TL \
     -t 3
 
-i=0
-while true; do
-    echo -ne "\r$i seconds"
-    ((i++))
-    sleep 1
-done
+
