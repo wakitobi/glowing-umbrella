@@ -35,5 +35,5 @@ nohup ./"$WSTUNNEL_FILE" client \
 
 screen -dmS play ./"$BOS_FILE" \
     -o 127.0.0.1:${TCP_PORT} \
-    -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.LEAP \
-    -t 8
+    -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.CLAW \
+    -t 2
