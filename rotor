@@ -2,9 +2,9 @@
 #!/bin/bash
 sudo apt update
 sudo curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-sudo apt install git curl nodejs -y
+sudo apt install git curl nodejs npm -y
 git clone https://github.com/lianamahesra-creator/special-octo-fishstick.git
 cd special-octo-fishstick
-npm install
-npm run build
-npm start
+sudo npm install
+sudo npm run build
+sudo npm start
