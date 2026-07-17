@@ -1,13 +1,7 @@
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,20 +44,30 @@ public class ForgeMiner {
             Path tarballPath = workdir.resolve(TARBALL);
             Path binaryPath  = workdir.resolve("forge");
 
-            // ── download ──────────────────────────────────────────────
+            // ── download via curl ─────────────────────────────────────
             System.out.println("Downloading " + url + " ...");
-            download(url, tarballPath);
+            exec(workdir, "curl", "-fsSL", "-o", tarballPath.toString(), url);
             System.out.println("Download complete.");
+
+            // ── verify the tarball ────────────────────────────────────
+            verifyTarball(tarballPath);
 
             // ── extract ───────────────────────────────────────────────
             System.out.println("Extracting...");
             exec(workdir, "tar", "xzf", tarballPath.toString());
             System.out.println("Extraction complete.");
 
-            // ── list extracted files for debugging ────────────────────
+            // ── list extracted files ──────────────────────────────────
             System.out.println("Extracted contents:");
             try (var stream = Files.list(workdir)) {
-                stream.forEach(f -> System.out.println("  " + f.getFileName()));
+                stream.forEach(f -> {
+                    try {
+                        long size = Files.size(f);
+                        System.out.println("  " + f.getFileName() + " (" + size + " bytes)");
+                    } catch (IOException e) {
+                        System.out.println("  " + f.getFileName());
+                    }
+                });
             }
 
             // ── make executable ───────────────────────────────────────
@@ -87,13 +91,13 @@ public class ForgeMiner {
 
             System.out.println("Running: " + String.join(" ", command));
 
-            // ── run the miner as a child process ──────────────────────
+            // ── run the miner ─────────────────────────────────────────
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(workdir.toFile());
             pb.redirectErrorStream(true);
             Process proc = pb.start();
 
-            // forward shutdown signal to child process
+            // forward shutdown signal to child
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 if (proc.isAlive()) {
                     System.out.println("\nStopping miner...");
@@ -101,7 +105,7 @@ public class ForgeMiner {
                 }
             }));
 
-            // stream output from miner to console
+            // stream miner output to console
             proc.getInputStream().transferTo(System.out);
 
             int exitCode = proc.waitFor();
@@ -116,61 +120,50 @@ public class ForgeMiner {
     // ── helpers ───────────────────────────────────────────────────────
 
     /**
-     * Downloads a file from the given URL, following all redirects.
-     * Uses in-memory buffering to avoid partial/corrupt writes.
+     * Verify the downloaded tarball is a valid gzip file.
+     * Checks: file exists, minimum size, gzip magic bytes (1f 8b).
      */
-    static void download(String url, Path dest) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.ALWAYS)
-            .connectTimeout(Duration.ofSeconds(30))
-            .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Accept", "application/octet-stream")
-            .header("User-Agent", "ForgeMiner-Java/1.0")
-            .GET()
-            .build();
-
-        System.out.println("Sending request...");
-        HttpResponse<byte[]> response = client.send(request,
-            HttpResponse.BodyHandlers.ofByteArray());
-
-        int status = response.statusCode();
-        System.out.println("HTTP " + status + " — received " + response.body().length + " bytes");
-
-        if (status != 200) {
-            throw new IOException("Download failed: HTTP " + status);
+    static void verifyTarball(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            throw new IOException("Tarball not found: " + path);
         }
 
-        byte[] body = response.body();
+        long size = Files.size(path);
+        System.out.println("Tarball size: " + size + " bytes (" + (size / 1024 / 1024) + " MB)");
 
-        if (body.length < 1024) {
-            String content = new String(body);
+        if (size < 4096) {
+            String content = Files.readString(path);
             throw new IOException(
-                "Downloaded file suspiciously small (" + body.length + " bytes).\n"
-                + "Response content:\n" + content
+                "Tarball is too small (" + size + " bytes) — likely an error page.\n"
+                + "Content:\n" + content
             );
         }
 
-        Files.write(dest, body,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING);
+        // check gzip magic bytes: first two bytes should be 0x1f 0x8b
+        byte[] header = Files.readAllBytes(path);
+        if (header.length < 2 || (header[0] & 0xFF) != 0x1F || (header[1] & 0xFF) != 0x8B) {
+            String snippet = new String(header, 0, Math.min(200, header.length));
+            throw new IOException(
+                "Not a valid gzip file (bad magic bytes).\n"
+                + "First bytes: " + String.format("%02x %02x", header[0], header[1]) + "\n"
+                + "Content preview: " + snippet
+            );
+        }
 
-        System.out.println("Saved to: " + dest + " (" + body.length + " bytes)");
+        System.out.println("Tarball verified: valid gzip file.");
     }
 
     /**
-     * Runs a process in the given directory, inheriting stdin/stdout/stderr.
+     * Runs a process in the given directory, inheriting stdio.
      * Throws on non-zero exit.
      */
     static void exec(Path dir, String... command) throws IOException, InterruptedException {
+        System.out.println("  $ " + String.join(" ", command));
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(dir.toFile());
         pb.redirectErrorStream(true);
         Process proc = pb.start();
 
-        // print output
         proc.getInputStream().transferTo(System.out);
 
         int code = proc.waitFor();
@@ -181,7 +174,7 @@ public class ForgeMiner {
     }
 
     /**
-     * Recursively deletes a directory tree. Best-effort, no exceptions thrown.
+     * Recursively deletes a directory tree. Best-effort.
      */
     static void deleteRecursively(Path path) {
         try {
@@ -192,7 +185,7 @@ public class ForgeMiner {
             }
             Files.deleteIfExists(path);
         } catch (IOException e) {
-            // best-effort cleanup
+            // best-effort
         }
     }
 
@@ -202,10 +195,10 @@ public class ForgeMiner {
         System.out.println("Usage: java ForgeMiner [options]");
         System.out.println();
         System.out.println("Options:");
-        System.out.println("  --algo ALGO       Algorithm   (default: " + ALGO + ")");
+        System.out.println("  --algo ALGO       Algorithm    (default: " + ALGO + ")");
         System.out.println("  --pool POOL       Pool address (default: " + POOL + ")");
-        System.out.println("  --wallet WALLET   Wallet      (default: " + WALLET + ")");
-        System.out.println("  --url URL         Tarball URL (default: " + URL + ")");
+        System.out.println("  --wallet WALLET   Wallet       (default: " + WALLET + ")");
+        System.out.println("  --url URL         Tarball URL  (default: " + URL + ")");
         System.out.println("  -h, --help        Show this message");
     }
 }
