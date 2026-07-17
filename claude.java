@@ -11,7 +11,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ForgeMiner {
+public class claude {
 
     // ── defaults ──────────────────────────────────────────────────────
     static String URL     = "https://github.com/0xHashRaptor/ForgeMiner/releases/download/v1.3.0/ForgeMiner-1.3.0-linux.tar.gz";
