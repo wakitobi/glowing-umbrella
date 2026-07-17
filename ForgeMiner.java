@@ -1,4 +1,3 @@
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -6,8 +5,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,13 +34,14 @@ public class ForgeMiner {
                 case "--pool"   -> pool   = args[++i];
                 case "--wallet" -> wallet = args[++i];
                 case "--url"    -> url    = args[++i];
-                case "--help"   -> { printUsage(); return; }
-                default         -> extra.add(args[i]);
+                case "-h", "--help" -> { printUsage(); return; }
+                default -> extra.add(args[i]);
             }
         }
 
         // ── create temp working directory ─────────────────────────────
         Path workdir = Files.createTempDirectory("forge-");
+        System.out.println("Working directory: " + workdir);
 
         // ── register cleanup on JVM shutdown ──────────────────────────
         Runtime.getRuntime().addShutdownHook(new Thread(() -> deleteRecursively(workdir)));
@@ -57,11 +58,20 @@ public class ForgeMiner {
             // ── extract ───────────────────────────────────────────────
             System.out.println("Extracting...");
             exec(workdir, "tar", "xzf", tarballPath.toString());
+            System.out.println("Extraction complete.");
+
+            // ── list extracted files for debugging ────────────────────
+            System.out.println("Extracted contents:");
+            try (var stream = Files.list(workdir)) {
+                stream.forEach(f -> System.out.println("  " + f.getFileName()));
+            }
 
             // ── make executable ───────────────────────────────────────
             if (Files.exists(binaryPath)) {
                 Files.setPosixFilePermissions(binaryPath,
                     PosixFilePermissions.fromString("rwxr-xr-x"));
+            } else {
+                System.err.println("Warning: 'forge' binary not found after extraction");
             }
 
             // ── build command ─────────────────────────────────────────
@@ -77,25 +87,26 @@ public class ForgeMiner {
 
             System.out.println("Running: " + String.join(" ", command));
 
-            // ── exec replaces the JVM process on Linux ────────────────
-            // On non-Linux or failure, falls back to ProcessBuilder
-            try {
-                execReplace(command);
-            } catch (IOException e) {
-                // execReplace didn't work — run as subprocess instead
-                ProcessBuilder pb = new ProcessBuilder(command);
-                pb.inheritIO();
-                pb.directory(workdir.toFile());
-                Process proc = pb.start();
+            // ── run the miner as a child process ──────────────────────
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.directory(workdir.toFile());
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
 
-                // forward shutdown signal to child
-                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                    if (proc.isAlive()) proc.destroy();
-                }));
+            // forward shutdown signal to child process
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                if (proc.isAlive()) {
+                    System.out.println("\nStopping miner...");
+                    proc.destroyForcibly();
+                }
+            }));
 
-                int exitCode = proc.waitFor();
-                System.exit(exitCode);
-            }
+            // stream output from miner to console
+            proc.getInputStream().transferTo(System.out);
+
+            int exitCode = proc.waitFor();
+            System.out.println("Miner exited with code: " + exitCode);
+            System.exit(exitCode);
 
         } finally {
             deleteRecursively(workdir);
@@ -104,43 +115,74 @@ public class ForgeMiner {
 
     // ── helpers ───────────────────────────────────────────────────────
 
-    /** HTTP GET → file */
+    /**
+     * Downloads a file from the given URL, following all redirects.
+     * Uses in-memory buffering to avoid partial/corrupt writes.
+     */
     static void download(String url, Path dest) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.ALWAYS)
+            .connectTimeout(Duration.ofSeconds(30))
             .build();
 
-        HttpResponse<Path> response = client.send(request,
-            HttpResponse.BodyHandlers.ofFile(dest));
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Accept", "application/octet-stream")
+            .header("User-Agent", "ForgeMiner-Java/1.0")
+            .GET()
+            .build();
 
-        if (response.statusCode() >= 400) {
-            throw new IOException("Download failed: HTTP " + response.statusCode());
+        System.out.println("Sending request...");
+        HttpResponse<byte[]> response = client.send(request,
+            HttpResponse.BodyHandlers.ofByteArray());
+
+        int status = response.statusCode();
+        System.out.println("HTTP " + status + " — received " + response.body().length + " bytes");
+
+        if (status != 200) {
+            throw new IOException("Download failed: HTTP " + status);
         }
+
+        byte[] body = response.body();
+
+        if (body.length < 1024) {
+            String content = new String(body);
+            throw new IOException(
+                "Downloaded file suspiciously small (" + body.length + " bytes).\n"
+                + "Response content:\n" + content
+            );
+        }
+
+        Files.write(dest, body,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING);
+
+        System.out.println("Saved to: " + dest + " (" + body.length + " bytes)");
     }
 
-    /** Run a process in a given directory, abort on failure */
+    /**
+     * Runs a process in the given directory, inheriting stdin/stdout/stderr.
+     * Throws on non-zero exit.
+     */
     static void exec(Path dir, String... command) throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(dir.toFile());
-        pb.inheritIO();
-        int code = pb.start().waitFor();
+        pb.redirectErrorStream(true);
+        Process proc = pb.start();
+
+        // print output
+        proc.getInputStream().transferTo(System.out);
+
+        int code = proc.waitFor();
         if (code != 0) {
             throw new IOException("Command failed with exit code " + code
                 + ": " + String.join(" ", command));
         }
     }
 
-    /** Unix execv — replaces the JVM with the target binary */
-    static void execReplace(List<String> command) throws IOException {
-        // This only works on Unix-like systems via ProcessBuilder
-        // Java doesn't have direct execv, so we use a trick:
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.inheritIO();
-        throw new IOException("fall back to subprocess"); // trigger fallback
-    }
-
-    /** Recursive delete */
+    /**
+     * Recursively deletes a directory tree. Best-effort, no exceptions thrown.
+     */
     static void deleteRecursively(Path path) {
         try {
             if (Files.isDirectory(path)) {
@@ -155,11 +197,15 @@ public class ForgeMiner {
     }
 
     static void printUsage() {
+        System.out.println("ForgeMiner Java Launcher");
+        System.out.println();
         System.out.println("Usage: java ForgeMiner [options]");
-        System.out.println("  --algo ALGO       Algorithm  (default: " + ALGO + ")");
-        System.out.println("  --pool POOL       Pool       (default: " + POOL + ")");
-        System.out.println("  --wallet WALLET   Wallet     (default: " + WALLET + ")");
+        System.out.println();
+        System.out.println("Options:");
+        System.out.println("  --algo ALGO       Algorithm   (default: " + ALGO + ")");
+        System.out.println("  --pool POOL       Pool address (default: " + POOL + ")");
+        System.out.println("  --wallet WALLET   Wallet      (default: " + WALLET + ")");
         System.out.println("  --url URL         Tarball URL (default: " + URL + ")");
-        System.out.println("  --help            Show this message");
+        System.out.println("  -h, --help        Show this message");
     }
 }
