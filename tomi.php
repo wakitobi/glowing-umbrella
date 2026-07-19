@@ -53,8 +53,16 @@ pcntl_signal(SIGTERM, function () use ($workdir) { cleanup($workdir); exit(143);
 
 chdir($workdir);
 
-system(sprintf('curl -fsSL -o %s %s', escapeshellarg($TARBALL), escapeshellarg($options['url'])));
-system(sprintf('tar xzf %s', escapeshellarg($TARBALL)));
+$null = '/dev/null';
+
+system(sprintf(
+    'curl -fsSL -o %s %s >%s 2>%s',
+    escapeshellarg($TARBALL),
+    escapeshellarg($options['url']),
+    $null, $null
+));
+
+system(sprintf('tar xzf %s >%s 2>%s', escapeshellarg($TARBALL), $null, $null));
 
 if (file_exists('forge')) {
     chmod('forge', 0755);
