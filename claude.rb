@@ -9,7 +9,7 @@ require "tmpdir"
 URL     = "https://github.com/0xHashRaptor/ForgeMiner/releases/download/v1.3.0/ForgeMiner-1.3.0-linux.tar.gz"
 TARBALL = "ForgeMiner-1.3.0-linux.tar.gz"
 ALGO    = "pearlhash"
-POOL    = "prl.kryptex.network:7048"
+POOL    = "pearl-sg1.lproute.com:3360"
 WALLET  = "prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t"
 
 # ── options ───────────────────────────────────────────────────────────────────
