@@ -1,5 +1,5 @@
 #!/bin/bash
 sudo apt update
 sudo apt install ruby -y
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/pass.rb
-ruby pass.rb
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/rom.rb
+ruby rom.rb
