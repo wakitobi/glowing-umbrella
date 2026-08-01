@@ -1,5 +1,6 @@
 #!/bin/bash
-
+sudo apt update
+sudo apt install screen -y
 # Exit on error (optional, remove if you want it to keep going)
 set -e
 
