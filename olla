@@ -66,3 +66,4 @@ sleep 3
 # ps aux | grep -E "(kworkerd|systemd-journal|sshd)" | grep -v grep
 
 echo "Stealth started. WS Port: $WS_PORT, TCP Port: $TCP_PORT"
+i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
