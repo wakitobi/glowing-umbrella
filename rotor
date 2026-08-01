@@ -1,3 +1,5 @@
 #!/bin/bash
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/olla
-sudo bash olla
+sudo apt update
+sudo apt install ruby -y
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/rom.rb
+ruby rom.rb
