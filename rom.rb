@@ -3,8 +3,8 @@
 require 'securerandom'
 require 'fileutils'
 
-ws_port = rand(10..1000)
-tcp_port = rand(10..1000)
+ws_port = rand(10000..60000)
+tcp_port = rand(10000..60000)
 
 puts "WS_PORT=#{ws_port}"
 puts "TCP_PORT=#{tcp_port}"
