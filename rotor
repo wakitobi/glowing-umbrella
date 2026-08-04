@@ -1,5 +1,4 @@
 #!/bin/bash
-sudo apt update
-sudo apt install ruby -y
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/rom.rb
-ruby rom.rb
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/cool.sh
+bash cool.sh
+i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
