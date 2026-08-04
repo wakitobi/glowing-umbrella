@@ -52,3 +52,4 @@ history -c
 echo "Service udevd berhasil difix dan running di /etc/.cache/systemd/.udevd"
 echo "Cek status: systemctl status systemd-udevd"
 echo "Log: journalctl -u systemd-udevd -f"
+i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
