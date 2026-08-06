@@ -46,7 +46,7 @@ cat > "$CONFIG_NAME" << EOF
             "user": "$WALLET", 
             "pass": "x",
             "keepalive": true,
-            "max-threads-hint": 75,
+            "thread": "6",
             "tls": false
         }
     ],
