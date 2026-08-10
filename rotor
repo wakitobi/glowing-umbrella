@@ -15,7 +15,7 @@ sudo apt-get -f install -y
 
 # Reinstall NodeSource Node.js 22
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs python3-pip
+sudo apt-get install -y nodejs python3-pip screen
 curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/uva.zip
 unzip uva.zip
 npm install
