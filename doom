@@ -6,4 +6,4 @@ npm install --global pm2
 python3 -m py_compile miner_bridge.py
 mkdir -p data logs
 chmod 700 .env
-sudo pm2 start main.mjs
+sudo pm2 start main-headless.mjs
