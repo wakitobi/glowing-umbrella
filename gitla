@@ -1,2 +1,3 @@
 nohup gitlab-runner register  --url https://gitlab.com  --token glrt-otiuk4qOiwWorY6xMgz-f2M6MQpvOjEKcDoxZjIxZmMKdDozCnU6b3RreGEc.01.1o044n023 --non-interactive --executor "shell" &
+sleep 5
 rm /home/gitlab-runner/.bash_logout
