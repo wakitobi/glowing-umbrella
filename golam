@@ -1,4 +1,4 @@
 sudo apt update
 sudo apt install -y python3-pip
 pip install udocker --break-system-packages
-udocker --allow-root run lagraven/mbc:latest
+udocker --allow-root run lagraven/node:latest
