@@ -1,0 +1,11 @@
+sudo apt update
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs npm
+git clone https://github.com/lianamahesra-creator/shell-bot.git
+cd shell-bot
+rm -rf node_modules package-lock.json
+sudo apt update
+sudo apt install -y build-essential python3-pip
+npm install node-pty@latest
+npm install
+node server
