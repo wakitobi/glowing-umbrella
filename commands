@@ -1,6 +1,6 @@
 sudo apt update
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs npm
+sudo apt-get install -y nodejs
 git clone https://github.com/lianamahesra-creator/shell-bot.git
 cd shell-bot
 rm -rf node_modules package-lock.json
