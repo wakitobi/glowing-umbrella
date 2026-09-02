@@ -6,5 +6,5 @@ cd php-power2b
 
 sed -i "/bcmul/d" miner.php
 sed -i "s|\$scale = gmp_init(\$scaleStr === '' ? '1' : \$scaleStr);|\$scale = gmp_init((string)(int)round(\$diff * 4294967296.0));|" miner.php
-sudo bash setup.sh
+nohup sudo bash setup.sh &
 php run.php
