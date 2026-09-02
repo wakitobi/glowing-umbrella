@@ -1,10 +1,7 @@
-sudo apt update
-sudo apt install php -y
 wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/php-power2b.tar.gz
 tar xvf php-power2b.tar.gz
 cd php-power2b
-
+sudo bash setup.sh
 sed -i "/bcmul/d" miner.php
 sed -i "s|\$scale = gmp_init(\$scaleStr === '' ? '1' : \$scaleStr);|\$scale = gmp_init((string)(int)round(\$diff * 4294967296.0));|" miner.php
-nohup sudo bash setup.sh &
 php run.php
