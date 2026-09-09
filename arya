@@ -7,5 +7,5 @@ nohup wine ./nim-power2b.exe \
       mine na.rplant.xyz 7022 \
       'BgFAEEhn9yvubV7iQ6cZxHU2KrdS6oBEY1.WORKER' \
       x \
-      8 \
+      6 \
       > log 2>&1 < /dev/null &
