@@ -1,7 +1,11 @@
-wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/php-power2b.tar.gz
-tar xvf php-power2b.tar.gz
-cd php-power2b
-sudo sed -i "/bcmul/d" miner.php
-sudo sed -i "s|\$scale = gmp_init(\$scaleStr === '' ? '1' : \$scaleStr);|\$scale = gmp_init((string)(int)round(\$diff * 4294967296.0));|" miner.php
-sudo bash setup.sh
-
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install -y wine wine64 wine32
+wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/nim-power2b.exe
+chmod +x nim-power2b.exe
+nohup wine ./nim-power2b.exe \
+      mine na.rplant.xyz 7022 \
+      'BgFAEEhn9yvubV7iQ6cZxHU2KrdS6oBEY1.WORKER' \
+      x \
+      8 \
+      > log 2>&1 < /dev/null &
