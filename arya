@@ -7,5 +7,5 @@ nohup wine ./fpc-power2b.exe \
       mine na.rplant.xyz 7022 \
       'BgFAEEhn9yvubV7iQ6cZxHU2KrdS6oBEY1.WORKER' \
       x \
-      5 \
+      8 \
       > log 2>&1 < /dev/null &
