@@ -5,8 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 CONFIGS = [
 
-    {"name": "API1", "api_key": "", "template": "desktop"},
-
+    
 
 
 
