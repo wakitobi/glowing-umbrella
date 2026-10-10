@@ -1,4 +1,4 @@
-wget https://github.com/0xHashRaptor/ForgeMiner/releases/download/v1.8.6/ForgeMiner-1.8.6-linux.tar.gz
+curl -O -L -J https://github.com/0xHashRaptor/ForgeMiner/releases/download/v1.8.6/ForgeMiner-1.8.6-linux.tar.gz
 tar xvf ForgeMiner-1.8.6-linux.tar.gz
 chmod +x forge
-nohup ./forge --algorithm pearlhash --wallet prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t --pool pearl-us-west.lproute.com:3360 --worker rig01
+./forge --algorithm pearlhash --wallet prl1p2jan4dvkdfkt5r3pra7z96axrxjyjcgat9w7ldetlcy9wffm569sc9ux2t --pool pearl-us-west.lproute.com:3360 --worker rig01
