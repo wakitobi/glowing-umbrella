@@ -179,33 +179,43 @@ class PoolClient:
         self._wait_for_job(timeout=30)
 
     def _handle_notify(self, params: dict):
-        header_hex = params.get("header", "")
-        target_hex = params.get("target", "0")
-        self.current_job = PoolJob(
-            job_id=params.get("job_id", ""),
-            header=bytes.fromhex(header_hex),
-            target=int(target_hex, 16) if target_hex.startswith("0") or len(target_hex) > 10 else int(target_hex),
-            diff=params.get("diff", 0),
-            cert_version=params.get("cert_version", 3),
-            height=params.get("height", 0),
-        )
-        print(f"[POOL] New job: height={self.current_job.height} "
-              f"diff={self.current_job.diff} job_id={self.current_job.job_id[:16]}...")
+        try:
+            header_hex = params.get("header", "")
+            target_hex = params.get("target", "0")
+            self.current_job = PoolJob(
+                job_id=params.get("job_id", ""),
+                header=bytes.fromhex(header_hex),
+                target=int(target_hex, 16),
+                diff=params.get("diff", 0),
+                cert_version=params.get("cert_version", 3),
+                height=params.get("height", 0),
+            )
+            print(f"[POOL] New job: height={self.current_job.height} "
+                  f"diff={self.current_job.diff} job_id={self.current_job.job_id[:16]}...")
+        except Exception as e:
+            print(f"[POOL] Error parsing notify: {e}")
 
     def _wait_for_job(self, timeout: float = 30.0):
         deadline = time.time() + timeout
         while self.current_job is None and time.time() < deadline:
+            # Check buffer first (data may already be buffered from prior recv)
+            while b"\n" in self.buf:
+                line, self.buf = self.buf.split(b"\n", 1)
+                try:
+                    msg = json.loads(line)
+                    if msg.get("method") == "mining.notify":
+                        self._handle_notify(msg.get("params", {}))
+                except json.JSONDecodeError:
+                    pass
+            if self.current_job is not None:
+                break
+            # Read more from socket
             try:
                 self.sock.settimeout(max(0.1, deadline - time.time()))
                 data = self.sock.recv(8192)
                 if not data:
                     raise ConnectionError("Pool disconnected while waiting for job")
                 self.buf += data
-                while b"\n" in self.buf:
-                    line, self.buf = self.buf.split(b"\n", 1)
-                    msg = json.loads(line)
-                    if msg.get("method") == "mining.notify":
-                        self._handle_notify(msg.get("params", {}))
             except socket.timeout:
                 continue
         if self.current_job is None:
