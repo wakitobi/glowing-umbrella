@@ -425,7 +425,7 @@ class GPUMiner:
     def mine_once(self, header: bytes, target: int, cert_version: int):
         """
         One mining attempt: generate matrices, compute GEMM, check PoW.
-        Returns (found, row_indices, col_indices, A_cpu, Bt_cpu, commitment_hash)
+        Returns (found, row_indices, col_indices, A_cpu, Bt_cpu, key, config)
         or (False, ...) if no solution found.
         """
         m, n, k = self.m, self.n, self.k
@@ -434,33 +434,7 @@ class GPUMiner:
         A = torch.randint(DATA_MIN, DATA_MAX + 1, (m, k), dtype=torch.int8, device="cpu")
         B = torch.randint(DATA_MIN, DATA_MAX + 1, (k, n), dtype=torch.int8, device="cpu")
 
-        # We need to pick row/col indices FIRST to build MiningConfiguration
-        # But the PoW check happens DURING the matmul — so we iterate over tiles.
-        # Each tile has its own MiningConfiguration.
-        # For efficiency, we precompute a "default" config for the first tile
-        # and check if the pool will accept arbitrary configs.
-        #
-        # Actually: the MiningConfiguration is per-tile, used to derive the
-        # commitment key. The key depends on the header + config, so each tile
-        # position has a different key → different commitment → different noise.
-        #
-        # This means for a FULL mining attempt we'd need to iterate over all
-        # possible tile positions, each with different noise.
-        #
-        # BUT the official miner doesn't do that — it picks ONE config (the
-        # first valid one) and mines with those noise matrices for the entire
-        # matrix. The PoW check happens at each 16×16 tile of the output.
-        #
-        # From the code: MiningConfiguration uses rows_pattern and cols_pattern
-        # which are PERIODIC patterns. For a standard 16×16 tile starting at
-        # (0,0), the pattern is {0,1,...,15} with period 16.
-        # The same pattern repeats for tiles at (128,0), (256,0), etc.
-        #
-        # Key insight from the CUDA kernel: it uses ONE MiningConfiguration
-        # for the entire matmul, but checks PoW at every 16×16 output tile.
-        # The winning tile's row/col indices are recorded AFTER the fact.
-
-        # Standard config: 16 consecutive rows/cols starting at 0
+        # Standard config: 16 consecutive rows/cols starting at 0 (periodic)
         default_rows = list(range(HASH_TILE_H))
         default_cols = list(range(HASH_TILE_W))
         config = make_mining_config(k, default_rows, default_cols)
@@ -484,123 +458,105 @@ class GPUMiner:
             noise_seed_A, noise_seed_B, m, k, n, NOISE_RANK
         )
 
-        # 6. Add noise
-        # E_A = E_AL @ E_AR  (m×r @ r×k → m×k)
-        E_A = torch.matmul(E_AL.to(torch.int32), E_AR.to(torch.int32)).to(torch.int8)
-        A_noised = (A + E_A).to(torch.int8)
+        # 6. Add noise and move to GPU
+        E_A = torch.matmul(E_AL.to(torch.int32), E_AR.to(torch.int32)).clamp(-128, 127).to(torch.int8)
+        A_noised = (A.to(torch.int16) + E_A.to(torch.int16)).clamp(-128, 127).to(torch.int8)
 
-        # E_B = E_BL @ E_BR  (k×r @ r×n → k×n)
-        E_B = torch.matmul(E_BL.to(torch.int32), E_BR.to(torch.int32)).to(torch.int8)
-        B_noised = (B + E_B).to(torch.int8)
+        E_B = torch.matmul(E_BL.to(torch.int32), E_BR.to(torch.int32)).clamp(-128, 127).to(torch.int8)
+        B_noised = (B.to(torch.int16) + E_B.to(torch.int16)).clamp(-128, 127).to(torch.int8)
 
-        # 7. GPU matmul — tiled with PoW checking
-        # Move noised matrices to GPU
-        if self.use_int8:
-            A_gpu = A_noised.to(self.device)
-            B_gpu = B_noised.to(self.device)
-        else:
-            # fp16 path for T4
-            A_gpu = A_noised.to(torch.float16).to(self.device)
-            B_gpu = B_noised.to(torch.float16).to(self.device)
-
-        # pow_key = noise_seed_A (commitment_hash_A)
+        # 7. GPU: full matmul + vectorized PoW check
         pow_key = noise_seed_A
-
-        # Tiled matmul with transcript accumulation
-        found, win_row, win_col = self._tiled_matmul_pow(
-            A_gpu, B_gpu, k, pow_key, target
+        found, win_row, win_col = self._gpu_matmul_pow(
+            A_noised, B_noised, k, pow_key, target
         )
 
         if found:
-            # Build actual row/col indices for the winning tile
             row_indices = list(range(win_row, win_row + HASH_TILE_H))
             col_indices = list(range(win_col, win_col + HASH_TILE_W))
             return True, row_indices, col_indices, A, B_t, key, config
 
         return False, None, None, None, None, None, None
 
-    def _tiled_matmul_pow(self, A_gpu, B_gpu, k, pow_key, target):
+    def _gpu_matmul_pow(self, A_noised, B_noised, k, pow_key, target):
         """
-        Tiled matmul with PoW checking at each 16×16 output tile.
-        Returns (found, winning_row, winning_col).
+        Full GPU matmul with vectorized transcript accumulation.
+        Does ONE big matmul on GPU, then vectorized XOR-reduce per tile.
+        Only blake3 PoW check runs on CPU (unavoidable).
         """
-        m = A_gpu.shape[0]
-        n = B_gpu.shape[1] if A_gpu.dim() == 2 and B_gpu.dim() == 2 else B_gpu.shape[0]
+        m, _ = A_noised.shape
+        _, n = B_noised.shape
+        dev = self.device
 
-        # For fp16 on T4, B is (k, n), we want C = A @ B → (m, n)
-        # For int8 path, same layout
+        num_k_tiles = k // NOISE_RANK  # 4096/128 = 32
 
-        tile_size = NOISE_RANK  # 128 — matmul tile matches noise_rank
+        # Number of 16x16 hash tiles in the output
+        th = m // HASH_TILE_H   # 4096/16 = 256
+        tw = n // HASH_TILE_W   # 4096/16 = 256
+        num_tiles = th * tw     # 65536
 
-        num_tiles_h = m // tile_size
-        num_tiles_w = n // tile_size
-        num_hash_per_tile_h = tile_size // HASH_TILE_H  # 128/16 = 8
-        num_hash_per_tile_w = tile_size // HASH_TILE_W  # 128/16 = 8
+        # Transcript state: (num_tiles, 16) as uint32 on GPU
+        transcripts = torch.zeros((num_tiles, TRANSCRIPT_SIZE_U32), dtype=torch.int64, device=dev)
 
-        for ti in range(num_tiles_h):
-            for tj in range(num_tiles_w):
-                i = ti * tile_size
-                j = tj * tile_size
+        # Process k-dimension in chunks of NOISE_RANK
+        # Each chunk: partial matmul → accumulate into running C → XOR-reduce hash tiles
+        C_accum = torch.zeros((m, n), dtype=torch.int32, device=dev)
 
-                # Initialize transcripts for this output tile
-                transcripts = [[([0] * TRANSCRIPT_SIZE_U32) for _ in range(num_hash_per_tile_w)]
-                               for _ in range(num_hash_per_tile_h)]
-                reduction_count = 0
+        for kk in range(num_k_tiles):
+            p = kk * NOISE_RANK
 
-                # Accumulate over k dimension in chunks of noise_rank
-                C_block = torch.zeros((tile_size, tile_size), dtype=torch.int32, device=self.device)
+            A_tile = A_noised[:, p:p+NOISE_RANK]
+            B_tile = B_noised[p:p+NOISE_RANK, :]
 
-                for p in range(0, k, NOISE_RANK):
-                    p_max = min(p + NOISE_RANK, k)
-                    if p_max - p < NOISE_RANK:
-                        continue  # Only full tiles count
+            if self.use_int8:
+                A_gpu = A_tile.to(dev)
+                B_gpu = B_tile.to(dev)
+                C_part = torch._int_mm(A_gpu, B_gpu)
+            else:
+                A_gpu = A_tile.to(torch.float16).to(dev)
+                B_gpu = B_tile.to(torch.float16).to(dev)
+                C_part = torch.matmul(A_gpu, B_gpu).to(torch.int32)
 
-                    A_tile = A_gpu[i:i+tile_size, p:p_max]
-                    B_tile = B_gpu[p:p_max, j:j+tile_size]
+            C_accum += C_part
 
-                    if self.use_int8:
-                        C_tile = torch._int_mm(A_tile, B_tile)
-                    else:
-                        # fp16: matmul then round to int32
-                        C_tile = torch.matmul(A_tile, B_tile).to(torch.int32)
+            # Vectorized XOR-reduce each 16x16 tile
+            # Reshape C_accum → (th, 16, tw, 16) → (th*tw, 256) → XOR reduce
+            C_tiles = C_accum.view(th, HASH_TILE_H, tw, HASH_TILE_W)
+            C_tiles = C_tiles.permute(0, 2, 1, 3).contiguous()  # (th, tw, 16, 16)
+            C_tiles = C_tiles.view(num_tiles, HASH_TILE_H * HASH_TILE_W)  # (65536, 256)
 
-                    C_block += C_tile
+            # XOR-reduce all 256 int32s in each tile to a single uint32
+            # Use bitwise_xor reduction via torch
+            xor_reduced = C_tiles[:, 0]
+            for j in range(1, HASH_TILE_H * HASH_TILE_W):
+                xor_reduced = xor_reduced ^ C_tiles[:, j]
+            # xor_reduced: (num_tiles,) int32
 
-                    # Inner hash: XOR-reduce each 16×16 hash tile
-                    C_cpu = C_block.cpu()
-                    for hi in range(num_hash_per_tile_h):
-                        for wi in range(num_hash_per_tile_w):
-                            tile_data = C_cpu[
-                                hi*HASH_TILE_H : (hi+1)*HASH_TILE_H,
-                                wi*HASH_TILE_W : (wi+1)*HASH_TILE_W
-                            ]
-                            # XOR reduce all int32 elements
-                            arr = tile_data.flatten().numpy().view(np.uint32)
-                            xor_val = int(np.bitwise_xor.reduce(arr))
+            # Accumulate into transcript: rotl13(old) ^ xor_val
+            idx = kk % TRANSCRIPT_SIZE_U32
+            old = transcripts[:, idx]
+            # rotl32 vectorized: ((x << 13) | (x >> 19)) & 0xFFFFFFFF
+            mask = 0xFFFFFFFF
+            rotated = ((old << HASH_ACCUMULATE_ROTATION) | (old >> (32 - HASH_ACCUMULATE_ROTATION))) & mask
+            transcripts[:, idx] = rotated ^ (xor_reduced.to(torch.int64) & mask)
 
-                            # Accumulate into transcript
-                            idx = reduction_count % TRANSCRIPT_SIZE_U32
-                            old = transcripts[hi][wi][idx]
-                            transcripts[hi][wi][idx] = rotl32(old, HASH_ACCUMULATE_ROTATION) ^ xor_val
+        # PoW check: move transcripts to CPU, blake3 each one
+        transcripts_cpu = transcripts.cpu().numpy().astype(np.uint32)  # (num_tiles, 16)
 
-                    reduction_count += 1
+        for tile_idx in range(num_tiles):
+            transcript_bytes = transcripts_cpu[tile_idx].tobytes()  # 64 bytes, already uint32 LE
+            hash_result = blake3(transcript_bytes, key=pow_key).digest()
 
-                # Check PoW for each hash tile in this output tile
-                for hi in range(num_hash_per_tile_h):
-                    for wi in range(num_hash_per_tile_w):
-                        transcript_bytes = b"".join(
-                            struct.pack("<I", t & 0xFFFFFFFF)
-                            for t in transcripts[hi][wi]
-                        )
-                        hash_result = blake3(transcript_bytes, key=pow_key).digest()
-                        hash_int = int.from_bytes(hash_result, "little")
+            self.total_hashes += 1
 
-                        self.total_hashes += 1
-
-                        if hash_int <= target:
-                            win_row = i + hi * HASH_TILE_H
-                            win_col = j + wi * HASH_TILE_W
-                            return True, win_row, win_col
+            # Compare as little-endian integer (matches reference implementation)
+            hash_int = int.from_bytes(hash_result, "little")
+            if hash_int <= target:
+                ti = tile_idx // tw
+                tj = tile_idx % tw
+                win_row = ti * HASH_TILE_H
+                win_col = tj * HASH_TILE_W
+                return True, win_row, win_col
 
         return False, -1, -1
 
